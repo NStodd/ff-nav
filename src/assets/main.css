@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ff-night:    #0A0A14;
+  --ff-dark:     #12122A;
+  --ff-panel:    #1A1A2E;
+  --ff-border:   #2A2A4A;
+  --ff-text:     #E8E0C8;
+  --ff-muted:    #9090A8;
+  --ff-gold:     #F0C060;
+  --ff-gold-dark:#B8860B;
+
+  --c-fighter:   #C0392B;
+  --c-thief:     #1E8449;
+  --c-wmage:     #1A5276;
+  --c-bmage:     #6C3483;
+}
+
+body {
+  background: var(--ff-night);
+  color: var(--ff-text);
+  font-family: 'Press Start 2P', monospace;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
