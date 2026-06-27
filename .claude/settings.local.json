@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($t = Get-Command tauri -ErrorAction SilentlyContinue; if \\($t\\) { $t.Source } else { \"tauri CLI not on PATH\" })",
+      "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)",
+      "PowerShell(npx tauri --version 2>&1)",
+      "PowerShell(Test-Path \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustc.exe\")",
+      "PowerShell(& \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustc.exe\" --version; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" --version)"
+    ]
+  }
+}
