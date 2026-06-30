@@ -19,17 +19,6 @@
           <span class="ability-name">{{ classData.ability }}</span>
           <span class="ability-desc">{{ classData.abilityDesc }}</span>
         </div>
-        <div class="stats">
-          <div v-for="stat in ['str', 'exp', 'agi']" :key="stat" class="stat-row">
-            <span class="stat-label">{{ stat.toUpperCase() }}</span>
-            <span
-              v-for="n in 5"
-              :key="n"
-              class="stat-pip"
-              :class="{ filled: n <= classData.stats[stat] }"
-            />
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -119,38 +108,5 @@ defineEmits(['select'])
   font-size: 6px;
   color: var(--ff-muted);
   line-height: 1.5;
-}
-
-.stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
-}
-
-.stat-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.stat-label {
-  font-size: 6px;
-  color: var(--ff-muted);
-  width: 20px;
-  flex-shrink: 0;
-}
-
-.stat-pip {
-  display: inline-block;
-  width:  7px;
-  height: 7px;
-  border: 1px solid var(--ff-border);
-  background: transparent;
-}
-
-.stat-pip.filled {
-  background: var(--cc);
-  border-color: var(--cc);
 }
 </style>
