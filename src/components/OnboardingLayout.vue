@@ -13,12 +13,22 @@
       </div>
 
       <footer class="frame-footer">
-        <span
-          v-for="n in totalSteps"
-          :key="n"
-          class="progress-dot"
-          :class="{ active: n - 1 === currentStep, past: n - 1 < currentStep }"
-        />
+        <button
+          v-if="currentStep > 0"
+          class="back-btn"
+          @click="$emit('back')"
+        >
+          &#9664; BACK
+        </button>
+        <div class="progress-dots">
+          <span
+            v-for="n in totalSteps"
+            :key="n"
+            class="progress-dot"
+            :class="{ active: n - 1 === currentStep, past: n - 1 < currentStep }"
+          />
+        </div>
+        <div v-if="currentStep > 0" class="back-spacer" />
       </footer>
     </div>
   </div>
@@ -33,6 +43,8 @@ defineProps({
   currentStep:  { type: Number, required: true },
   classColor:   { type: String, default: null },
 })
+
+defineEmits(['back'])
 </script>
 
 <style scoped>
@@ -83,11 +95,36 @@ defineProps({
 }
 
 .frame-footer {
-  padding:         14px;
+  padding:         14px 20px;
   border-top:      2px solid var(--ff-border);
   display:         flex;
-  justify-content: center;
-  gap:             10px;
+  justify-content: space-between;
+  align-items:     center;
+}
+
+.progress-dots {
+  display: flex;
+  gap:     10px;
+}
+
+.back-btn {
+  font-family:    'Press Start 2P', monospace;
+  font-size:      7px;
+  padding:        6px 10px;
+  background:     transparent;
+  border:         1px solid var(--ff-border);
+  color:          var(--ff-muted);
+  cursor:         pointer;
+  transition:     border-color 0.15s, color 0.15s;
+}
+
+.back-btn:hover {
+  border-color: var(--cc, var(--ff-gold));
+  color:        var(--cc, var(--ff-gold));
+}
+
+.back-spacer {
+  width: 60px;
 }
 
 .progress-dot {

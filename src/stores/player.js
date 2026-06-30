@@ -18,11 +18,17 @@ export const usePlayerStore = defineStore('player', () => {
     onboardingStep.value++
   }
 
+  function goBackOnboarding() {
+    if (onboardingStep.value > 0) {
+      onboardingStep.value--
+    }
+  }
+
   function reset() {
     chosenClass.value    = null
     onboardingStep.value = 0
     localStorage.removeItem(STORAGE_KEY)
   }
 
-  return { chosenClass, onboardingStep, selectClass, advanceOnboarding, reset }
+  return { chosenClass, onboardingStep, selectClass, advanceOnboarding, goBackOnboarding, reset }
 })

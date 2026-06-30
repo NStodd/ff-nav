@@ -3,6 +3,7 @@
     :totalSteps="totalSteps"
     :currentStep="store.onboardingStep"
     :classColor="classData?.color"
+    @back="prevStep"
   >
     <Transition name="step" mode="out-in">
       <WelcomeStep
@@ -59,6 +60,10 @@ const currentStepId = computed(() => {
 
 function nextStep() {
   store.advanceOnboarding()
+}
+
+function prevStep() {
+  store.goBackOnboarding()
 }
 </script>
 
