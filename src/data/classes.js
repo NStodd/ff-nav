@@ -22,9 +22,42 @@ export const CLASSES = [
       '011111110',
       '011111110',
     ],
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
     intro: 'The world stretches beyond the horizon, warrior. Paths untravelled await your boots. Glory is not given — it is discovered.',
     locationPrompt: 'SCOUT needs your coordinates, warrior.',
+    personalization: {
+      type: 'open-ended',
+      prompt: 'Tell me of your quest, warrior.',
+      questions: [
+        {
+          id: 'destinations',
+          label: 'What kind of places call to you?',
+          placeholder: 'Hidden trails, mountain peaks, forgotten ruins...',
+        },
+        {
+          id: 'journey_values',
+          label: 'What makes a journey worth taking?',
+          placeholder: 'The challenge, the discovery, the stories...',
+        },
+      ],
+      socialLabel: 'Share your adventures',
+      socialLinks: [
+        {
+          id: 'strava',
+          name: 'Strava',
+          icon: 'S',
+          color: '#FC4C02',
+          placeholder: 'username',
+        },
+        {
+          id: 'instagram',
+          name: 'Instagram',
+          icon: 'IG',
+          color: '#E1306C',
+          placeholder: '@username',
+        },
+      ],
+    },
   },
   {
     id: 'thief',
@@ -49,9 +82,49 @@ export const CLASSES = [
       '011d1d110',
       '011d0d110',
     ],
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
     intro: 'No wasted motion. No unnecessary stops. The fastest route is not always the obvious one — but you already knew that.',
     locationPrompt: 'Location locked. Route calculated. Move.',
+    personalization: {
+      type: 'choices',
+      prompt: 'Configure. Optimize. Go.',
+      questions: [
+        {
+          id: 'travel_mode',
+          label: 'Primary travel mode',
+          type: 'single',
+          default: 'car',
+          options: [
+            { value: 'walk', label: 'Walk' },
+            { value: 'bike', label: 'Bike' },
+            { value: 'car', label: 'Car' },
+            { value: 'transit', label: 'Transit' },
+          ],
+        },
+        {
+          id: 'priority',
+          label: 'Route priority',
+          type: 'single',
+          default: 'fastest',
+          options: [
+            { value: 'fastest', label: 'Fastest' },
+            { value: 'shortest', label: 'Shortest' },
+            { value: 'fewest_turns', label: 'Fewest turns' },
+          ],
+        },
+        {
+          id: 'avoid',
+          label: 'Avoid',
+          type: 'multi',
+          default: [],
+          options: [
+            { value: 'tolls', label: 'Tolls' },
+            { value: 'highways', label: 'Highways' },
+            { value: 'ferries', label: 'Ferries' },
+          ],
+        },
+      ],
+    },
   },
   {
     id: 'wmage',
@@ -76,9 +149,49 @@ export const CLASSES = [
       '01100110',
       '01100110',
     ],
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
     intro: 'A journey shared is a journey halved. Your party awaits — together, every road feels shorter.',
     locationPrompt: 'Share your light — let your party find you.',
+    personalization: {
+      type: 'open-ended',
+      prompt: 'Let us know your heart, traveler.',
+      questions: [
+        {
+          id: 'companions',
+          label: 'Who travels with you most often?',
+          placeholder: 'Family, friends, colleagues...',
+        },
+        {
+          id: 'shared_meaning',
+          label: 'What makes a shared journey meaningful?',
+          placeholder: 'The conversations, the memories, arriving together...',
+        },
+      ],
+      socialLabel: 'Connect with your party',
+      socialLinks: [
+        {
+          id: 'instagram',
+          name: 'Instagram',
+          icon: 'IG',
+          color: '#E1306C',
+          placeholder: '@username',
+        },
+        {
+          id: 'twitter',
+          name: 'X / Twitter',
+          icon: 'X',
+          color: '#1DA1F2',
+          placeholder: '@handle',
+        },
+        {
+          id: 'discord',
+          name: 'Discord',
+          icon: 'D',
+          color: '#5865F2',
+          placeholder: 'username#0000',
+        },
+      ],
+    },
   },
   {
     id: 'bmage',
@@ -103,8 +216,45 @@ export const CLASSES = [
       '001001100',
       '000111000',
     ],
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
     intro: 'Power demands precision. Privacy demands vigilance. You navigate on your terms — and your terms alone.',
     locationPrompt: 'Your position is required. Resistance is inefficient.',
+    personalization: {
+      type: 'choices',
+      prompt: 'Establish your dominion.',
+      questions: [
+        {
+          id: 'location_sharing',
+          label: 'Location sharing',
+          type: 'single',
+          default: 'navigating',
+          options: [
+            { value: 'never', label: 'Never' },
+            { value: 'navigating', label: 'Only when navigating' },
+            { value: 'always', label: 'Always' },
+          ],
+        },
+        {
+          id: 'history',
+          label: 'Save journey history',
+          type: 'single',
+          default: 'yes',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' },
+          ],
+        },
+        {
+          id: 'suggestions',
+          label: 'Allow route suggestions from others',
+          type: 'single',
+          default: 'no',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' },
+          ],
+        },
+      ],
+    },
   },
 ]

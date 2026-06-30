@@ -13,6 +13,14 @@
         @next="nextStep"
       />
 
+      <PersonalizeStep
+        v-else-if="currentStepId === 'personalize'"
+        :key="'personalize'"
+        :classData="classData"
+        @save="savePreferences"
+        @next="nextStep"
+      />
+
       <AbilityRevealStep
         v-else-if="currentStepId === 'ability'"
         :key="'ability'"
@@ -42,6 +50,7 @@ import { usePlayerStore } from '@/stores/player.js'
 
 import OnboardingLayout       from '@/components/OnboardingLayout.vue'
 import WelcomeStep            from '@/components/WelcomeStep.vue'
+import PersonalizeStep        from '@/components/PersonalizeStep.vue'
 import AbilityRevealStep      from '@/components/AbilityRevealStep.vue'
 import LocationPermissionStep from '@/components/LocationPermissionStep.vue'
 import DoneStep               from '@/components/DoneStep.vue'
@@ -64,6 +73,10 @@ function nextStep() {
 
 function prevStep() {
   store.goBackOnboarding()
+}
+
+function savePreferences(prefs) {
+  store.setPreferences(prefs)
 }
 </script>
 
