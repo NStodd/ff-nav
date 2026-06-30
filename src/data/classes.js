@@ -22,6 +22,9 @@ export const CLASSES = [
       '011111110',
       '011111110',
     ],
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'The world stretches beyond the horizon, warrior. Paths untravelled await your boots. Glory is not given — it is discovered.',
+    locationPrompt: 'SCOUT needs your coordinates, warrior.',
   },
   {
     id: 'thief',
@@ -46,6 +49,9 @@ export const CLASSES = [
       '011d1d110',
       '011d0d110',
     ],
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'No wasted motion. No unnecessary stops. The fastest route is not always the obvious one — but you already knew that.',
+    locationPrompt: 'Location locked. Route calculated. Move.',
   },
   {
     id: 'wmage',
@@ -70,6 +76,9 @@ export const CLASSES = [
       '01100110',
       '01100110',
     ],
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'A journey shared is a journey halved. Your party awaits — together, every road feels shorter.',
+    locationPrompt: 'Share your light — let your party find you.',
   },
   {
     id: 'bmage',
@@ -94,5 +103,8 @@ export const CLASSES = [
       '001001100',
       '000111000',
     ],
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'Power demands precision. Privacy demands vigilance. You navigate on your terms — and your terms alone.',
+    locationPrompt: 'Your position is required. Resistance is inefficient.',
   },
 ]

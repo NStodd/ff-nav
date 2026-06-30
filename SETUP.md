@@ -222,3 +222,116 @@ The Tauri dev target (full desktop app) requires the Rust toolchain:
 ```bash
 npm run tauri dev
 ```
+
+---
+
+## Milestone 1 Verification (2026-06-30)
+
+Ran a verification pass to confirm the project is properly initialized:
+
+### What was checked
+
+1. **Project structure** — Confirmed all required files exist:
+   - Core: `main.ts`, `App.vue`, `main.css`
+   - Data: `classes.js` with all 4 class definitions
+   - State: `player.js` Pinia store with localStorage persistence
+   - Routing: `index.js` with navigation guard
+   - Components: `PixelSprite`, `StarField`, `PixelDivider`, `ClassCard`
+   - Views: `ClassSelectScreen`, `OnboardingScreen` (stub)
+
+2. **Dependencies** — Ran `npm install`; all packages resolved with no vulnerabilities
+
+3. **Dev server** — Started Vite via `npm run dev`; confirmed it serves on **port 1420** (Tauri default)
+
+4. **Type checking** — Ran `vue-tsc --noEmit`; one minor warning about the JS router import in `main.ts` (non-blocking, runtime works fine)
+
+### Additional Milestone 2 components found
+
+The following components were already present beyond the Milestone 1 spec:
+
+- `DialogBox.vue` — FF-style text box with typewriter effect
+- `OnboardingLayout.vue` — Wrapper with pixel-border chrome
+- `PixelButton.vue` — Reusable styled button
+
+### Status
+
+**Milestone 1: Complete** — Class selection screen is fully functional. Users can select a class, see the selection highlighted, confirm, and navigate to the onboarding stub.
+
+**Next steps:** Continue with Milestone 2 (onboarding flow infrastructure) as outlined in `CLAUDE.md`.
+
+---
+
+## Milestone 2 Implementation (2026-06-30)
+
+Built the complete onboarding flow infrastructure.
+
+### Data updates (`src/data/classes.js`)
+
+Added onboarding content to each class entry:
+
+| Field | Purpose |
+|---|---|
+| `onboardingSteps` | Array of step IDs: `['intro', 'ability', 'location', 'done']` |
+| `intro` | Class-flavored narration for the welcome step |
+| `locationPrompt` | One-liner for the geolocation permission ask |
+
+**Example (Fighter):**
+```js
+intro: 'The world stretches beyond the horizon, warrior...',
+locationPrompt: 'SCOUT needs your coordinates, warrior.',
+```
+
+### New step components
+
+| Component | Purpose |
+|---|---|
+| `WelcomeStep.vue` | Displays class sprite with floating animation, name, and intro narration via DialogBox |
+| `AbilityRevealStep.vue` | Animated reveal of class ability with glow effects, shimmer, and sparkle particles |
+| `LocationPermissionStep.vue` | Requests geolocation with pulse animation; handles granted/denied/skip states |
+| `DoneStep.vue` | Fanfare celebration with star burst animation; transitions to map screen |
+
+### Updated views
+
+**`OnboardingScreen.vue`** — Complete rewrite:
+- Uses `OnboardingLayout` wrapper with progress dots
+- Renders current step component based on `store.onboardingStep` index into `classData.onboardingSteps`
+- Vue `<Transition>` provides slide animation between steps
+- Calls `store.advanceOnboarding()` on each `@next` event
+
+**`MapScreen.vue`** (new stub):
+- Displays class badge with sprite in top-left HUD
+- Compass placeholder with spinning ring
+- "Change Class" button that calls `store.reset()` and returns to class selection
+
+### Router update (`src/router/index.js`)
+
+Added `/map` route:
+```js
+{ path: '/map', name: 'map', component: MapScreen }
+```
+
+### File tree additions
+
+```
+src/
+  components/
+    WelcomeStep.vue           ← NEW
+    AbilityRevealStep.vue     ← NEW
+    LocationPermissionStep.vue← NEW
+    DoneStep.vue              ← NEW
+  views/
+    OnboardingScreen.vue      ← REWRITTEN
+    MapScreen.vue             ← NEW
+```
+
+### Status
+
+**Milestone 2: Complete** — Full onboarding flow works end-to-end. Users can:
+1. Select a class
+2. See intro narration (typewriter effect)
+3. View ability reveal (animated)
+4. Grant or skip location permission
+5. See fanfare celebration
+6. Enter map screen stub
+
+**Next steps:** Milestone 3 (map integration with Leaflet/MapLibre).
