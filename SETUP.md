@@ -335,3 +335,82 @@ src/
 6. Enter map screen stub
 
 **Next steps:** Milestone 3 (map integration with Leaflet/MapLibre).
+
+---
+
+## Milestone 2 Enhancements (2026-07-01)
+
+Additional features added to the onboarding flow.
+
+### Back button
+
+Added navigation back through onboarding steps:
+- `player.js` — Added `goBackOnboarding()` function
+- `OnboardingLayout.vue` — Back button in footer (hidden on step 0)
+- Button styled to match pixel aesthetic, emits `@back` event
+
+### Removed stats from class cards
+
+Simplified `ClassCard.vue` by removing the STR/EXP/AGI stat pips. Cards now show: sprite, name, tag, description, and ability only.
+
+### Personalization step
+
+New onboarding step (`personalize`) that collects user preferences before ability reveal.
+
+**Step order:** `['intro', 'personalize', 'ability', 'location', 'done']`
+
+**Two input modes per class:**
+
+| Class | Mode | Content |
+|---|---|---|
+| Fighter | `open-ended` | Text inputs for exploration preferences |
+| Thief | `choices` | Radio/checkbox for travel mode, priority, avoidances |
+| White Mage | `open-ended` | Text inputs for companion/journey preferences |
+| Black Mage | `choices` | Privacy and control settings |
+
+**Configuration in `classes.js`:**
+```js
+personalization: {
+  type: 'open-ended' | 'choices',
+  prompt: 'Class-flavored header',
+  questions: [
+    // Open-ended:
+    { id: 'q1', label: 'Question?', placeholder: 'Hint...' },
+    // Single choice (with optional default):
+    { id: 'q2', label: 'Pick one', type: 'single', default: 'opt1', options: [...] },
+    // Multi choice:
+    { id: 'q3', label: 'Select many', type: 'multi', default: [], options: [...] },
+  ],
+  // Optional social links:
+  socialLabel: 'Connect your accounts',
+  socialLinks: [
+    { id: 'instagram', name: 'Instagram', icon: 'IG', color: '#E1306C', placeholder: '@username' },
+  ],
+}
+```
+
+**Social media linking:**
+- Fighter: Strava, Instagram
+- White Mage: Instagram, X/Twitter, Discord
+- Thief/Black Mage: None (efficiency/privacy focused)
+
+**Preferences storage:**
+- Added `preferences` ref to `player.js`
+- Persisted to localStorage as `crystalpath-prefs`
+- `setPreferences(prefs)` merges new preferences
+
+### New files
+
+```
+src/
+  components/
+    PersonalizeStep.vue  ← NEW (open-ended + choices + social links)
+```
+
+### Updated files
+
+- `src/data/classes.js` — Added `personalization` config to all classes
+- `src/stores/player.js` — Added `preferences`, `setPreferences()`, `goBackOnboarding()`
+- `src/views/OnboardingScreen.vue` — Added PersonalizeStep routing
+- `src/components/OnboardingLayout.vue` — Added back button
+- `src/components/ClassCard.vue` — Removed stats section
