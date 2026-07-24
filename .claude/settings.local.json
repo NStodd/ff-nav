@@ -5,7 +5,12 @@
       "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)",
       "PowerShell(npx tauri --version 2>&1)",
       "PowerShell(Test-Path \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustc.exe\")",
-      "PowerShell(& \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustc.exe\" --version; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" --version)"
+      "PowerShell(& \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustc.exe\" --version; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" --version)",
+      "Bash(rm -f \"e:\\\\prj\\\\tauri\\\\ff_nav\\\\FF_Navigation\\\\_verify_hud.mjs\" /tmp/vite7.log /tmp/hud_*.png *)",
+      "Bash(node _verify_fix.mjs)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

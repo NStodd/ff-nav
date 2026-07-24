@@ -9,17 +9,21 @@
     <div class="corner corner-br" />
 
     <div class="content">
+      <PixelButton variant="ghost" class="back-link" @click="router.push({ name: 'genre-select' })">
+        &#8592; GENRES
+      </PixelButton>
+
       <header class="header">
         <h1>CRYSTAL PATH</h1>
         <PixelDivider />
-        <p class="subtitle">NAVIGATION CHRONICLES</p>
+        <p class="subtitle">{{ genre.tagline.toUpperCase() }}</p>
       </header>
 
       <p class="prompt">— choose your class —</p>
 
       <div class="grid" role="radiogroup" aria-label="Class selection">
         <ClassCard
-          v-for="cls in CLASSES"
+          v-for="cls in genre.classes"
           :key="cls.id"
           :classData="cls"
           :selected="selected(cls.id)"
@@ -36,7 +40,7 @@
           &#9658; CONFIRM CLASS
         </button>
         <p v-if="selectedId" class="confirm-text">
-          {{ CLASSES.find(c => c.id === selectedId)?.name.toUpperCase() }} selected
+          {{ genre.classes.find(c => c.id === selectedId)?.name.toUpperCase() }} selected
         </p>
       </div>
     </div>
@@ -44,16 +48,20 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { usePlayerStore } from '@/stores/player.js'
-import { CLASSES } from '@/data/classes.js'
+import { GENRES } from '@/data/genres.js'
 import StarField from '@/components/StarField.vue'
 import PixelDivider from '@/components/PixelDivider.vue'
 import ClassCard from '@/components/ClassCard.vue'
+import PixelButton from '@/components/PixelButton.vue'
 
 const router = useRouter()
+const route  = useRoute()
 const store  = usePlayerStore()
+
+const genre = computed(() => GENRES.find(g => g.id === route.params.genreId))
 
 const selectedId = ref(null)
 const selected   = (id) => selectedId.value === id
@@ -63,9 +71,10 @@ function onSelect(id) {
 }
 
 function confirm() {
-  const cls = CLASSES.find(c => c.id === selectedId.value)
+  const cls = genre.value.classes.find(c => c.id === selectedId.value)
+  store.selectGenre(genre.value)
   store.selectClass(cls)
-  router.push({ name: 'onboarding' })
+  router.push({ name: 'onboarding', params: { genreId: genre.value.id } })
 }
 </script>
 
@@ -100,6 +109,12 @@ function confirm() {
   flex-direction: column;
   align-items: center;
   gap: 1.5rem;
+}
+
+.back-link {
+  align-self: flex-start;
+  font-size: 8px;
+  padding: 6px 10px;
 }
 
 .header {

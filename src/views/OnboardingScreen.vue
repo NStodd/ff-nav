@@ -1,14 +1,31 @@
 <template>
-  <div style="padding: 2rem; font-family: 'Press Start 2P', monospace; color: #F0C060;">
-    <p>Welcome, {{ store.chosenClass?.name }}.</p>
-    <p style="margin-top: 1rem; font-size: 10px; color: #9090A8;">Onboarding flow coming soon.</p>
-    <button @click="router.push('/')" style="margin-top: 2rem; font-family: 'Press Start 2P', monospace; cursor: pointer;">&#8592; Back</button>
-  </div>
+  <OnboardingLayout
+    :totalSteps="store.chosenClass.onboardingSteps.length"
+    :currentStep="store.onboardingStep"
+    :classColor="store.chosenClass.color"
+  >
+    <component :is="currentStepComponent" @advance="store.advanceOnboarding()" />
+  </OnboardingLayout>
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 import { usePlayerStore } from '@/stores/player.js'
-const router = useRouter()
-const store  = usePlayerStore()
+import OnboardingLayout from '@/components/OnboardingLayout.vue'
+import WelcomeStep from '@/components/onboarding/WelcomeStep.vue'
+import AbilityRevealStep from '@/components/onboarding/AbilityRevealStep.vue'
+import LocationPermissionStep from '@/components/onboarding/LocationPermissionStep.vue'
+import DoneStep from '@/components/onboarding/DoneStep.vue'
+
+const STEP_COMPONENTS = {
+  intro:    WelcomeStep,
+  ability:  AbilityRevealStep,
+  location: LocationPermissionStep,
+  done:     DoneStep,
+}
+
+const store = usePlayerStore()
+
+const currentStepId = computed(() => store.chosenClass.onboardingSteps[store.onboardingStep])
+const currentStepComponent = computed(() => STEP_COMPONENTS[currentStepId.value])
 </script>

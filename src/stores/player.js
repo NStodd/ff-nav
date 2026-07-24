@@ -1,17 +1,30 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { CLASSES } from '@/data/classes'
+import { GENRES } from '@/data/genres'
 
-const STORAGE_KEY = 'crystalpath-class'
+const GENRE_KEY = 'crystalpath-genre'
+const CLASS_KEY = 'crystalpath-class'
 
 export const usePlayerStore = defineStore('player', () => {
-  const savedId = localStorage.getItem(STORAGE_KEY)
-  const chosenClass    = ref(savedId ? (CLASSES.find(c => c.id === savedId) ?? null) : null)
+  const savedGenreId = localStorage.getItem(GENRE_KEY)
+  const savedClassId = localStorage.getItem(CLASS_KEY)
+
+  const chosenGenre = ref(savedGenreId ? (GENRES.find(g => g.id === savedGenreId) ?? null) : null)
+  const chosenClass = ref(
+    chosenGenre.value && savedClassId
+      ? (chosenGenre.value.classes.find(c => c.id === savedClassId) ?? null)
+      : null
+  )
   const onboardingStep = ref(0)
+
+  function selectGenre(genre) {
+    chosenGenre.value = genre
+    localStorage.setItem(GENRE_KEY, genre.id)
+  }
 
   function selectClass(cls) {
     chosenClass.value = cls
-    localStorage.setItem(STORAGE_KEY, cls.id)
+    localStorage.setItem(CLASS_KEY, cls.id)
   }
 
   function advanceOnboarding() {
@@ -19,10 +32,12 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function reset() {
+    chosenGenre.value    = null
     chosenClass.value    = null
     onboardingStep.value = 0
-    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(GENRE_KEY)
+    localStorage.removeItem(CLASS_KEY)
   }
 
-  return { chosenClass, onboardingStep, selectClass, advanceOnboarding, reset }
+  return { chosenGenre, chosenClass, onboardingStep, selectGenre, selectClass, advanceOnboarding, reset }
 })

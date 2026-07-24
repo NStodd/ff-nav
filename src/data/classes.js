@@ -8,6 +8,9 @@ export const CLASSES = [
     ability: 'SCOUT',
     abilityDesc: 'Reveals hidden POIs within a radius around you.',
     stats: { str: 5, exp: 3, agi: 2 },
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'At last — a new road! Every path unwalked is a challenge, and I answer every one. Adventure will not wait, and neither will I.',
+    locationPrompt: 'SCOUT needs your coordinates, warrior.',
     sprite: [
       '00022200',
       '00222220',
@@ -32,6 +35,9 @@ export const CLASSES = [
     ability: 'SHADOW STEP',
     abilityDesc: 'Silently switches to a faster route mid-journey.',
     stats: { str: 2, exp: 4, agi: 5 },
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'No wasted moves. No wrong turns. Fastest route, every time — that is the job. Let\'s move.',
+    locationPrompt: 'Location locked. Route calculated. Move.',
     sprite: [
       '000d1d000',
       '00d111d00',
@@ -56,6 +62,9 @@ export const CLASSES = [
     ability: 'CURE',
     abilityDesc: 'One-tap ETA share with any party member.',
     stats: { str: 1, exp: 5, agi: 3 },
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'You\'re never really navigating alone. Wherever you\'re headed, I\'ll help you get there — and help the people traveling with you, too.',
+    locationPrompt: 'Share your light — let your party find you.',
     sprite: [
       '001www100',
       '01wwwww10',
@@ -80,6 +89,9 @@ export const CLASSES = [
     ability: 'FIRE',
     abilityDesc: 'Launches a fireball across the map. Non-negotiable.',
     stats: { str: 5, exp: 2, agi: 3 },
+    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    intro: 'I calculate the optimal path. You will follow it. Deviation is... inadvisable.',
+    locationPrompt: 'Your position is required. Resistance is inefficient.',
     sprite: [
       '001111100',
       '011111110',

@@ -47,6 +47,164 @@ Detailed breakdown of the five global milestones that must exist before any clas
 - Frame border uses a layered shadow: `border` (2px, class color), `outline` (4px, `--ff-night` offset inward), and `box-shadow` (6px solid ring + a diffuse glow in the class color at 30% opacity via `color-mix()`). This creates the classic FF window-within-window border look without extra DOM elements.
 - Progress dots in the footer: a `v-for` over `totalSteps`. Each dot is `.past` (filled muted), `.active` (filled class color), or default (empty). The `active` class is `n - 1 === currentStep`; `past` is `n - 1 < currentStep`.
 
+### 3. Genre landing layer
+
+**Files created:** `src/data/genres.js`, `src/components/GenreCard.vue`, `src/views/GenreSelectScreen.vue`
+**Files changed:** `src/router/index.js`, `src/views/ClassSelectScreen.vue`, `src/views/OnboardingScreen.vue`
+
+Crystal Path was originally scoped as a single genre (Final Fantasy). This adds a genre layer above class selection so the app can host multiple RPG-genre onboarding flows later, with only Final Fantasy fully built today.
+
+**`src/data/genres.js`**
+- New `GENRES` array, sibling to `CLASSES`, not nested inside it — a genre owns a whole onboarding flow (its own class roster, sprites, copy), so it's a peer data source rather than a property of `classes.js`.
+- Each entry: `id`, `name`, `tagline`, `description`, `color`, `status` (`'available'` | `'coming-soon'`), `entryRoute` (route `name` to push to, or `null` for locked genres).
+- Ships with one `available` entry (`ff`, pointing at `entryRoute: 'class-select'`) and two `coming-soon` placeholders (`scifi`, `western`) so the landing grid doesn't look sparse with a single card. Their copy is intentionally generic — they're layout placeholders, not designed content.
+
+**`src/components/GenreCard.vue`**
+- Modeled on `ClassCard.vue`'s structure (the `--cc` CSS var trick, same border/hover pattern) but simpler — no sprite, no stat pips, since a genre isn't a stat-bearing entity.
+- `status !== 'available'` renders a `COMING SOON` badge, drops `tabindex` to `-1`, sets `aria-disabled`, and no-ops the click/keydown handler instead of emitting `select`. Locked cards also skip the hover border-color change so they read as inert.
+
+**`src/views/GenreSelectScreen.vue`**
+- Structurally a near-clone of `ClassSelectScreen.vue` (StarField, corner decorations, header, `PixelDivider`) minus the confirm-button footer — genre selection is a direct navigation, not a staged choice like class (no stat comparison to weigh, so no separate confirm step).
+- `onSelect(genre)` pushes to `genre.entryRoute` only if the genre is available; the coming-soon no-op already happens inside `GenreCard`, so this is a second line of defense, not the primary guard.
+
+**Router (`src/router/index.js`)**
+- `/` is now `genre-select` (this screen). Final Fantasy's flow moved down a level: `/ff` → `class-select`, `/ff/onboarding` → `onboarding`. This makes room for `/starvoyager`, `/frontier`, etc. as future genres get built out, each owning its own path prefix.
+- The `beforeEach` guard now passes both `genre-select` and `class-select` through unconditionally; any other named route without `store.chosenClass` redirects to `class-select`. Known limitation: that redirect always lands on the FF class-select screen regardless of which genre's route the user was trying to reach — harmless today since FF is the only genre with downstream routes, but will need a genre-aware redirect once a second genre gets its own onboarding routes.
+- No `chosenGenre` was added to the player store. Genre choice isn't state that needs to persist or gate anything yet — it's just which URL prefix the user is under. Revisit if a second genre needs its own persisted flow state.
+
+**Back-navigation fixes**
+- `ClassSelectScreen.vue` gained a `PixelButton variant="ghost"` "← GENRES" link (top-left of `.content`) since `/ff` is no longer the app root — without it there'd be no way back to the genre picker.
+- `OnboardingScreen.vue`'s stub "← Back" button now pushes `{ name: 'class-select' }` instead of `'/'`, since `'/'` is the genre picker, not the class picker, post-restructure.
+
+### 4. Genre-generic routing & store
+
+**Files changed:** `src/router/index.js`, `src/stores/player.js`, `src/data/genres.js`, `src/views/ClassSelectScreen.vue`, `src/views/OnboardingScreen.vue`
+
+The genre landing layer above (§3) hardcoded a single path prefix (`/ff`) and a static `CLASSES` import — fine for one genre, but every additional genre would have meant duplicating `ClassSelectScreen.vue`/`OnboardingScreen.vue` wholesale. This pass makes the class-select and onboarding screens generic over *any* genre, driven by data and a route param, so a second genre needs a content entry, not new components. No second genre was actually built — `scifi` and `western` remain locked placeholders (`classes: []`) — this is infrastructure only.
+
+**`src/data/genres.js`**
+- Each genre entry now carries `classes` — the `ff` entry points at the existing `CLASSES` from `classes.js` (imported, not duplicated); the locked placeholders get `classes: []` since nothing has been designed for them yet.
+
+**Router (`src/router/index.js`)**
+- Routes are now `/` (`genre-select`) → `/:genreId` (`class-select`) → `/:genreId/onboarding` (`onboarding`). `/ff` still works, but so would `/scifi` the moment that genre's `status` flips to `'available'` — no route table changes needed per genre.
+- The guard resolves `to.params.genreId` against `GENRES` on every navigation: an unknown id or a `'coming-soon'` genre bounces to `genre-select` before the id ever reaches a component (verified: `/bogus-genre` and `/scifi` — currently locked — both redirect to `/`). `class-select` passes once the genre check clears. Any deeper route additionally requires `store.chosenClass` to exist *and* `store.chosenGenre.id` to match the current `genreId` — the second condition is what stops a leftover session for one genre from being treated as valid on another genre's onboarding route.
+
+**Store (`src/stores/player.js`)**
+- Added `chosenGenre`, persisted under its own `crystalpath-genre` localStorage key (separate from `crystalpath-class`) via a new `selectGenre()` action. This was deliberately *not* added back in §3 because at the time genre was just a URL prefix; now that class rosters are genre-scoped, the store needs to know which genre's roster `chosenClass` was picked from to rehydrate correctly.
+- Rehydration on init now reads the saved genre first, then looks up the saved class id inside *that genre's* `classes` array (not a global `CLASSES` import) — so two genres are free to reuse class ids (e.g. both having a `'fighter'`) without colliding.
+- `reset()` clears both keys.
+
+**`ClassSelectScreen.vue`**
+- No longer imports `CLASSES` directly. Reads `route.params.genreId`, resolves `genre = GENRES.find(...)` as a computed, and renders `genre.classes` / `genre.tagline` instead of the hardcoded FF roster and "NAVIGATION CHRONICLES" subtitle. `confirm()` now calls `store.selectGenre(genre.value)` before `store.selectClass(cls)`, and pushes to `onboarding` with the current `genreId` param.
+- The "← GENRES" back link is unchanged (genre-select needs no params).
+
+**`OnboardingScreen.vue`**
+- The "← Back" button now pushes `{ name: 'class-select', params: { genreId: store.chosenGenre.id } }` — plain `{ name: 'class-select' }` would resolve to a path missing the required param.
+
+**Verified with Playwright:** genre select → `/ff`; `/bogus-genre` and `/scifi` (locked) both redirect to `/`; full class pick → confirm → `/ff/onboarding`; refresh on onboarding preserves genre + class and shows the right welcome text; Back from onboarding returns to `/ff`; a fresh browser context hitting `/ff/onboarding` directly (no chosen class) redirects to `/ff`. No console/page errors in any case.
+
+### 5. Step-driven onboarding engine
+
+**Files created:** `src/components/onboarding/WelcomeStep.vue`, `src/components/onboarding/AbilityRevealStep.vue`, `src/components/onboarding/LocationPermissionStep.vue`, `src/components/onboarding/DoneStep.vue`, `src/views/MapScreen.vue`
+**Files changed:** `src/data/classes.js`, `src/views/OnboardingScreen.vue`, `src/router/index.js`
+
+`OnboardingLayout`, `PixelButton`, and `DialogBox` were built back in §2 but sat unused — `OnboardingScreen.vue` was still the original one-paragraph stub. This pass wires them into the real step engine described in `CLAUDE.md` milestone 3, and replaces the stub entirely (its "← Back" button, and the note about it in §4, is now superseded — a multi-step flow doesn't have a single back target).
+
+**`src/data/classes.js`**
+- Each class gained `onboardingSteps: ['intro', 'ability', 'location', 'done']`, `intro` (short narration in the class's voice), and `locationPrompt` (the exact per-class copy from `CLAUDE.md`'s flavor table). `ability`/`abilityDesc` already existed from milestone 1 and needed no changes.
+
+**`src/views/OnboardingScreen.vue`** — full rewrite, no longer a stub
+- A `STEP_COMPONENTS` map (`intro`/`ability`/`location`/`done` → component) plus two computeds — `currentStepId` reads `store.chosenClass.onboardingSteps[store.onboardingStep]`, `currentStepComponent` resolves it to a component. No null-guarding: the router guard already guarantees `chosenClass` is set before this screen mounts.
+- Renders `<component :is="currentStepComponent" @advance="store.advanceOnboarding()" />` inside `OnboardingLayout`, passing `store.chosenClass.color` through as `classColor` so the frame border/progress dots pick up the class tint automatically (this is why the Fighter run below is red-bordered and the Thief run is green-bordered — no per-step color plumbing needed).
+- Steps only ever emit `advance`; they don't know their own index or what comes next, per the spec.
+
+**`WelcomeStep.vue`** — `DialogBox` bound to `chosenClass.intro`; a "CONTINUE ▶" `PixelButton` appears on `@done` and emits `advance`.
+
+**`AbilityRevealStep.vue`** — `PixelSprite` at `pixelSize="8"` as a backdrop, the ability name fades/pulses in via CSS immediately, then after an 800ms `setTimeout` the description `DialogBox` appears; "CONTINUE ▶" shows on its `@done`.
+
+**`LocationPermissionStep.vue`**
+- A single `DialogBox` whose `:text` is a ternary between `chosenClass.locationPrompt` and an error string — switching the prop retriggers `DialogBox`'s own `watch(() => props.text, ...)`, so no manual restart call was needed and no second `DialogBox` instance.
+- "GRANT ACCESS ▶" calls `navigator.geolocation.getCurrentPosition()`; disabled (`requesting`) while in flight. Success emits `advance` directly. Failure swaps the dialog text to an error message and reveals a ghost-variant "SKIP FOR NOW" button that also emits `advance`.
+- Deliberately does **not** write the resolved position anywhere yet — there's no navigation store to put it in until milestone 5 (map foundation) is built. The position is fetched (proving the permission flow works end-to-end) and then discarded. Revisit once `src/stores/navigation.js` exists.
+
+**`DoneStep.vue`** — plays a ~1.4s CSS "fanfare" (scale/opacity keyframes on a `✦ READY ✦` line), then `setTimeout` pushes to `{ name: 'map', params: { genreId: store.chosenGenre.id } }`. Reads `chosenGenre` from the store rather than `useRoute()` — one less import, and the store is already the source of truth here.
+
+**`src/views/MapScreen.vue`** (new stub) + **router** — added `/:genreId/map` → `map`. No guard changes needed: `map` isn't `genre-select` or `class-select`, so it already falls under the existing "must have a matching `chosenClass`" branch. The stub itself just confirms genre/class and offers a "← START OVER" button that calls `store.reset()` and returns to `genre-select` — a full teardown, not a real map (that's milestone 5's job).
+
+**Verified with Playwright, two full runs:** (1) Fighter, geolocation granted via `context.newContext({ geolocation, permissions: ['geolocation'] })` — intro → ability → location → grant → auto-redirect to `/ff/map`. (2) Thief, no geolocation permission granted (so `getCurrentPosition` errors) — same path through to the error dialog → "SKIP FOR NOW" → `/ff/map`. Both runs: correct class-colored frame border/progress dots throughout, sprite rendered at the ability step, zero console/page errors. Screenshots confirmed intro/ability/location/error/map all render correctly.
+
+### 6. Map foundation (MapLibre GL)
+
+**Files created:** `src/stores/navigation.js`, `Navigation.md`
+**Files changed:** `src/views/MapScreen.vue` (stub → real), `src/components/onboarding/LocationPermissionStep.vue`, `vite.config.ts`, `package.json` (added `maplibre-gl`)
+
+Real implementation of milestone 5's `MapScreen.vue` + navigation store, using MapLibre GL (chosen over Leaflet for tighter dark-theme control via a vector style rather than a CSS filter hack). **Full write-up, including the data-flow diagram, the store's state shape, and every rendering decision, lives in `Navigation.md` — this entry is deliberately short to avoid duplicating it.**
+
+The two things worth flagging here specifically because they cost real debugging time:
+- **`maplibre-gl` v6 has no default export** (`import maplibregl from 'maplibre-gl'` fails at runtime with "does not provide an export named 'default'") — it's named exports only (`Map`, `Marker`, `NavigationControl`, ...). `MapScreen.vue` imports `{ Map as MapLibreMap, Marker, NavigationControl }`.
+- **`vite.config.ts` needed `optimizeDeps: { exclude: ['maplibre-gl'] }`** — without it, Vite's dev-server pre-bundling breaks MapLibre's internal worker-script URL and the map renders as a solid black rectangle with no thrown error (just a 404 on `maplibre-gl-worker.mjs` visible in the network tab). `Navigation.md` has the full explanation; this is the kind of thing that looks like a totally unrelated bug if you hit it cold.
+
+`LocationPermissionStep.vue` was also updated: the position fetched during `requestLocation()`'s success callback is now written to `navigation.setPosition()` instead of being discarded (as noted as a gap in §5 above) — closing that loop was the reason the store needed to exist before this pass.
+
+**Verified with Playwright** (geolocation granted via `context.newContext({ geolocation, permissions: ['geolocation'] })`, real network calls to CARTO's tile server and OSRM's public routing API): full run from genre-select through onboarding to `/ff/map`; map renders real street data (confirmed visually, not just "no errors" — screenshots show actual Philadelphia streets/labels); user marker appears at the correct position in class color; clicking the map sets a destination, fetches a route, and renders it as a class-colored line with a correct ETA in the info panel. Zero console/page errors in the final passing run.
+
+### 7. HUD overlay + design-tuning tool
+
+**Files created:** `src/components/HudOverlay.vue`, `src/components/AbilityButton.vue`, `src/views/HudPlayground.vue`
+**Files changed:** `src/views/MapScreen.vue` (dropped the placeholder `.info-panel` in favor of `HudOverlay`), `src/assets/main.css` (new `--hud-*` tokens), `src/router/index.js` (added `/dev/hud`)
+
+Closes out the last piece of `CLAUDE.md` milestone 5. Full behavioral detail (props, the cooldown animation mechanics, how the `@ability` event bubbles to `MapScreen.vue`) lives in `Navigation.md`'s new "The HUD layer" section — this entry covers what's specific to *how it was built*, not duplicated there.
+
+The user asked for tools to tune the HUD's look easily, not just the HUD itself, so the design surface was built as **CSS custom properties with `main.css`-level defaults**, overridable per-instance via Vue's normal `style` attribute fallthrough — no HudOverlay-specific plumbing needed for that part. `HudPlayground.vue` (`/dev/hud`) is a live-tweaking page built on top of that: sliders bound to a `computed` style object passed straight to `<HudOverlay :style="hudStyle">`, a 4-class picker, a fake-ETA slider, and a "COPY CSS" button that clipboard-writes a ready-to-paste `:root` block. It previews against the *real* `player`/`navigation` stores (so `HudOverlay` needed zero special-casing for the preview context) but assigns state directly to the store refs instead of calling `selectGenre()`/`selectClass()`, since those actions persist to `localStorage` and a dev tool overwriting a real in-progress class selection would be a bad surprise. The override is session-only; a refresh restores whatever was actually persisted.
+
+The router needed one addition beyond the new route: `/dev/hud` is registered before the genre-select bypass check in the guard, since it's the one route in the app that legitimately needs neither a genre nor a chosen class.
+
+**Verified with Playwright:** on `/dev/hud` — class picker switches sprite/color/ability correctly, every slider visibly changes the rendered HUD, clicking the ability button disables it and confirms cooldown state programmatically, "COPY CSS" produces a clipboard string containing the expected token names. On the real `/ff/map` — `HudOverlay` renders correctly over the live map with the chosen class's sprite, stats, and ability name. Zero console/page errors throughout.
+
+### 8. Second genre: Star Voyager
+
+**Files created:** `src/data/scifiClasses.js`
+**Files changed:** `src/data/genres.js` (`scifi` flipped from `coming-soon` to `available`, `entryRoute` set, `classes` populated)
+
+Content only — no component or store changes were needed, which was the actual point of this pass: it's the first real test of whether the genre-generic refactor from §4 (and everything built on top of it since — the step engine, the map, the HUD) genuinely works for a second genre, or only looked generic with one data point.
+
+**`src/data/scifiClasses.js`** — a `SCIFI_CLASSES` array, same shape as `CLASSES`, four roles mapped onto the same archetypes the FF roster uses (bold/adventurous, terse/efficient, warm/communal, ominous/controlling) so the tone contrast reads the same way across genres:
+
+| FF | Star Voyager | Ability |
+|---|---|---|
+| Fighter (Adventurer) | **Pilot** (Ace) | SCAN — sensor sweep for hidden waypoints |
+| Thief (Speedrunner) | **Smuggler** (Runner) | JUMP DRIVE — silent faster-route switch |
+| White Mage (Connector) | **Diplomat** (Liaison) | UPLINK — one-tap ETA share |
+| Black Mage (Sovereign) | **Overseer** (Sovereign) | PURGE — wipes trail data |
+
+Sprites reuse the FF roster's silhouettes (Pilot←Fighter's armored-body shape, Smuggler←Thief's hooded/low-profile shape, Diplomat←White Mage's robed shape, Overseer←Black Mage's hooded/masked shape) rather than hand-drawing four new ones — the role analogues share enough visual logic (helmeted ace, cloaked runner, robed go-between, masked authority) that reinterpreting the existing pixel grids with new colors held up fine. Pilot's sprite swaps White Mage's skin-tone `'2'` cells for `'w'` (helmet visor instead of exposed face) since it's a spacesuit, not a person.
+
+Genre-level `color` (`#3498DB`, unchanged) stays distinct from all four class colors, matching the existing convention that a genre's brand color isn't shared with any of its classes' identity colors.
+
+**Verified with Playwright:** genre-select shows three cards (Final Fantasy available, Star Voyager now available, Wild Frontier still correctly locked); clicking a still-locked genre card is confirmed inert; full flow through `/scifi` → pick Diplomat → confirm → onboarding (intro/ability/location, all showing the correct sci-fi copy and blue class color) → `/scifi/map` with `HudOverlay` showing the Diplomat sprite, stats, and UPLINK button. Zero console/page errors, zero code changes needed outside the two data files.
+
+### 9. Third genre: Wild Frontier
+
+**Files created:** `src/data/westernClasses.js`
+**Files changed:** `src/data/genres.js` (`western` flipped from `coming-soon` to `available`, `entryRoute` set, `classes` populated)
+
+Same recipe as §8, applied to the last remaining locked genre — all three genre cards on the landing page are now real. Same four archetypes again, this time as Gunslinger (Drifter) / TRAILBLAZE, Outrider (Rider) / BACKTRAIL, Wagon Master (Guide) / SIGNAL FIRE, Outlaw (Renegade) / VANISH, reusing the same four sprite silhouettes as the other two rosters.
+
+**One real bug caught during verification, worth remembering:** the Outlaw's first color pick (`#3D2B56`, a dark desaturated violet) rendered as flat gray against the app's near-black background (`--ff-night: #0A0A14`) instead of reading as purple — screenshotted it and the "CRYSTAL PATH" title/CONTINUE button/border all looked colorless. Every other class color in the app (FF and Star Voyager both) sits at roughly 35-45% lightness with real saturation, which is what gives the `--cc`-tinted UI its pop on a dark background; this one was too dark to clear that bar. Fixed by picking a brighter, more saturated color in the same "ominous" family (`#7A2048`, a deep magenta-red) — re-screenshotted to confirm it actually reads as a distinct color before moving on. **Lesson for designing any future genre's palette: check new class colors against the dark background visually, not just conceptually** — a color that sounds right for the flavor ("dark, ominous purple") can still fail to render as a color at all at low lightness/saturation.
+
+**Verified with Playwright:** genre-select now shows zero "coming soon" badges across all three cards; full flow through `/western` → pick Outlaw → confirm → onboarding → `/western/map` with `HudOverlay` showing the corrected color. Zero console/page errors, zero code changes needed outside the two data files (matching §8 — second confirmation the genre-generic architecture holds).
+
+### 10. Fourth genre: High Seas
+
+**Files created:** `src/data/pirateClasses.js`
+**Files changed:** `src/data/genres.js` (new `pirate` entry, `status: 'available'` from the start — no locked placeholder stage this time, since the pattern is now proven three times over)
+
+Same recipe as §8/§9 for a fourth genre, id `pirate`, name "High Seas": Buccaneer (Voyager) / SPYGLASS, Corsair (Raider) / FULL SAIL, Quartermaster (Boatswain) / SIGNAL FLAG, Captain (Sovereign) / SCUTTLE — same four archetypes and the same four reused sprite silhouettes as every other genre.
+
+Applied §9's lesson from the start this time: picked all four class colors (`#D35400` burnt orange, `#148F77` teal, `#C9962C` brass gold, `#7B2331` crimson) and the genre's own brand color (`#1ABC9C` turquoise) aiming for the same ~35-45% lightness/real-saturation range the other genres' colors sit at, then screenshotted all four classes' onboarding intro screens *before* calling it done rather than after — confirmed all four read as distinct, vibrant colors against `--ff-night` on the first pass, no fix-up round needed this time.
+
+**Verified with Playwright:** genre-select shows four cards, zero locked; class-select shows all four pirate classes with correct sprites/stats/abilities; walked all four classes' onboarding intro screens to check color contrast; full run through Captain → confirm → onboarding → `/pirate/map` with `HudOverlay` showing the crimson SCUTTLE button. Zero console/page errors, zero code changes needed outside the two data files — third confirmation the genre-generic architecture holds with no per-genre special-casing anywhere in the component/store/router layer.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -169,7 +327,7 @@ It also makes the `advanceOnboarding()` store action meaningful: any step compon
    </OnboardingLayout>
    ```
 
-5. **Each step emits `advance`** when the user is ready to proceed — the engine calls `store.advanceOnboarding()`. Steps never know their index or what comes next.
+5. **Each step emits `advance`** when the user is ready to proceed — the engine calls `store.advanceOnboarding()`. Steps nev er know their index or what comes next.
 
 6. **Guard the last step** — `DoneStep` should watch `store.onboardingStep` reaching the end of the array and push to `/map` instead of emitting `advance`.
 

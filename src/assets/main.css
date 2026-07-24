@@ -16,6 +16,16 @@
   --c-thief:     #1E8449;
   --c-wmage:     #1A5276;
   --c-bmage:     #6C3483;
+
+  /* HudOverlay.vue design tokens — tune here for a permanent change,
+     or preview changes live first at /dev/hud (src/views/HudPlayground.vue). */
+  --hud-panel-alpha:  0.92;
+  --hud-panel-blur:   6px;
+  --hud-padding:      14px;
+  --hud-gap:          18px;
+  --hud-pip-size:     8px;
+  --hud-glow:         0.35;
+  --hud-ability-size: 100px;
 }
 
 body {

@@ -14,6 +14,13 @@ export default defineConfig(async () => ({
     },
   },
 
+  // maplibre-gl constructs its worker script URL relative to its own package
+  // file at runtime; Vite's dependency pre-bundling flattens that file into
+  // .vite/deps/ and breaks the relative URL, so exclude it from optimization.
+  optimizeDeps: {
+    exclude: ['maplibre-gl'],
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
