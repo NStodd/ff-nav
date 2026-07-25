@@ -8,9 +8,42 @@ export const CLASSES = [
     ability: 'SCOUT',
     abilityDesc: 'Reveals hidden POIs within a radius around you.',
     stats: { str: 5, exp: 3, agi: 2 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
-    intro: 'At last — a new road! Every path unwalked is a challenge, and I answer every one. Adventure will not wait, and neither will I.',
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
+    intro: 'The world stretches beyond the horizon, warrior. Paths untravelled await your boots. Glory is not given — it is discovered.',
     locationPrompt: 'SCOUT needs your coordinates, warrior.',
+    personalization: {
+      type: 'open-ended',
+      prompt: 'Tell me of your quest, warrior.',
+      questions: [
+        {
+          id: 'destinations',
+          label: 'What kind of places call to you?',
+          placeholder: 'Hidden trails, mountain peaks, forgotten ruins...',
+        },
+        {
+          id: 'journey_values',
+          label: 'What makes a journey worth taking?',
+          placeholder: 'The challenge, the discovery, the stories...',
+        },
+      ],
+      socialLabel: 'Share your adventures',
+      socialLinks: [
+        {
+          id: 'strava',
+          name: 'Strava',
+          icon: 'S',
+          color: '#FC4C02',
+          placeholder: 'username',
+        },
+        {
+          id: 'instagram',
+          name: 'Instagram',
+          icon: 'IG',
+          color: '#E1306C',
+          placeholder: '@username',
+        },
+      ],
+    },
     sprite: [
       '00022200',
       '00222220',
@@ -35,9 +68,49 @@ export const CLASSES = [
     ability: 'SHADOW STEP',
     abilityDesc: 'Silently switches to a faster route mid-journey.',
     stats: { str: 2, exp: 4, agi: 5 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
-    intro: 'No wasted moves. No wrong turns. Fastest route, every time — that is the job. Let\'s move.',
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
+    intro: 'No wasted motion. No unnecessary stops. The fastest route is not always the obvious one — but you already knew that.',
     locationPrompt: 'Location locked. Route calculated. Move.',
+    personalization: {
+      type: 'choices',
+      prompt: 'Configure. Optimize. Go.',
+      questions: [
+        {
+          id: 'travel_mode',
+          label: 'Primary travel mode',
+          type: 'single',
+          default: 'car',
+          options: [
+            { value: 'walk', label: 'Walk' },
+            { value: 'bike', label: 'Bike' },
+            { value: 'car', label: 'Car' },
+            { value: 'transit', label: 'Transit' },
+          ],
+        },
+        {
+          id: 'priority',
+          label: 'Route priority',
+          type: 'single',
+          default: 'fastest',
+          options: [
+            { value: 'fastest', label: 'Fastest' },
+            { value: 'shortest', label: 'Shortest' },
+            { value: 'fewest_turns', label: 'Fewest turns' },
+          ],
+        },
+        {
+          id: 'avoid',
+          label: 'Avoid',
+          type: 'multi',
+          default: [],
+          options: [
+            { value: 'tolls', label: 'Tolls' },
+            { value: 'highways', label: 'Highways' },
+            { value: 'ferries', label: 'Ferries' },
+          ],
+        },
+      ],
+    },
     sprite: [
       '000d1d000',
       '00d111d00',
@@ -62,9 +135,49 @@ export const CLASSES = [
     ability: 'CURE',
     abilityDesc: 'One-tap ETA share with any party member.',
     stats: { str: 1, exp: 5, agi: 3 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
-    intro: 'You\'re never really navigating alone. Wherever you\'re headed, I\'ll help you get there — and help the people traveling with you, too.',
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
+    intro: 'A journey shared is a journey halved. Your party awaits — together, every road feels shorter.',
     locationPrompt: 'Share your light — let your party find you.',
+    personalization: {
+      type: 'open-ended',
+      prompt: 'Let us know your heart, traveler.',
+      questions: [
+        {
+          id: 'companions',
+          label: 'Who travels with you most often?',
+          placeholder: 'Family, friends, colleagues...',
+        },
+        {
+          id: 'shared_meaning',
+          label: 'What makes a shared journey meaningful?',
+          placeholder: 'The conversations, the memories, arriving together...',
+        },
+      ],
+      socialLabel: 'Connect with your party',
+      socialLinks: [
+        {
+          id: 'instagram',
+          name: 'Instagram',
+          icon: 'IG',
+          color: '#E1306C',
+          placeholder: '@username',
+        },
+        {
+          id: 'twitter',
+          name: 'X / Twitter',
+          icon: 'X',
+          color: '#1DA1F2',
+          placeholder: '@handle',
+        },
+        {
+          id: 'discord',
+          name: 'Discord',
+          icon: 'D',
+          color: '#5865F2',
+          placeholder: 'username#0000',
+        },
+      ],
+    },
     sprite: [
       '001www100',
       '01wwwww10',
@@ -89,9 +202,46 @@ export const CLASSES = [
     ability: 'FIRE',
     abilityDesc: 'Launches a fireball across the map. Non-negotiable.',
     stats: { str: 5, exp: 2, agi: 3 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
-    intro: 'I calculate the optimal path. You will follow it. Deviation is... inadvisable.',
+    onboardingSteps: ['intro', 'personalize', 'ability', 'location', 'done'],
+    intro: 'Power demands precision. Privacy demands vigilance. You navigate on your terms — and your terms alone.',
     locationPrompt: 'Your position is required. Resistance is inefficient.',
+    personalization: {
+      type: 'choices',
+      prompt: 'Establish your dominion.',
+      questions: [
+        {
+          id: 'location_sharing',
+          label: 'Location sharing',
+          type: 'single',
+          default: 'navigating',
+          options: [
+            { value: 'never', label: 'Never' },
+            { value: 'navigating', label: 'Only when navigating' },
+            { value: 'always', label: 'Always' },
+          ],
+        },
+        {
+          id: 'history',
+          label: 'Save journey history',
+          type: 'single',
+          default: 'yes',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' },
+          ],
+        },
+        {
+          id: 'suggestions',
+          label: 'Allow route suggestions from others',
+          type: 'single',
+          default: 'no',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' },
+          ],
+        },
+      ],
+    },
     sprite: [
       '001111100',
       '011111110',
