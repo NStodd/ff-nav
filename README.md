@@ -21,6 +21,7 @@ The design goal driving everything since Milestone 5: **be a genuinely useful na
 - **Real backends, not fakes.** Routing via OSRM (`router.project-osrm.org` in dev), POI discovery via the Overpass API (`overpass-api.de` in dev), map tiles from CARTO's free "Dark Matter" vector style. Both endpoints are swappable via env vars before real traffic — see [Backends](#backends) below.
 - **Growth that isn't cosmetic.** A separate profile store tracks XP, levels, and lifetime stats per class, independent of which genre/class you currently have selected. STR/AGI/EXP aren't just pips — they scale an ability's magnitude, its cooldown, and how fast you level, respectively. See [`Profile.md`](Profile.md).
 - **A party roster with a real effect.** Add people during onboarding or from your profile screen; the Connector archetype's ETA-share message actually addresses them by name. No accounts, no sync — a local roster that changes what gets shared, not a promise of a real multiplayer system yet.
+- **Saved destinations.** Save your current destination with a tap from the map, then pick it back up from your profile screen instead of retracing a map tap — the first piece of real navigation-capability work beyond routing/POIs, with turn-by-turn and multi-stop routes planned next.
 
 ---
 
@@ -59,7 +60,7 @@ This repo's docs are reference material for how things actually work, not just a
 | [`Genres.md`](Genres.md) | The genre/class architecture and the recipe for adding a new genre |
 | [`Sprites.md`](Sprites.md) | The pixel-sprite format and a step-by-step guide to hand-drawing new ones |
 | [`Navigation.md`](Navigation.md) | The navigation store, MapLibre integration, and the HUD layer |
-| [`Profile.md`](Profile.md) | Growth (XP/levels/stat effects), arrival detection, the party roster |
+| [`Profile.md`](Profile.md) | Growth (XP/levels/stat effects), arrival detection, the party roster, saved destinations |
 | [`PRODUCTION.md`](PRODUCTION.md) | What's release-blocking vs. an acceptable v1 limitation before shipping for real |
 | [`PLANNING.md`](PLANNING.md) | Chronological build log — what was built, in what order, and why |
 | [`Issues.md`](Issues.md) | Bugs investigated in depth (e.g. the Android permissions crash) |

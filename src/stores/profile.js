@@ -35,13 +35,24 @@ function blankClassProgress() {
 
 export const useProfileStore = defineStore('profile', () => {
   const saved = localStorage.getItem(STORAGE_KEY)
-  const initial = saved ? JSON.parse(saved) : { classes: {}, party: [] }
+  const initial = saved ? JSON.parse(saved) : { classes: {}, party: [], savedDestinations: [] }
 
+  // "Character" data — scoped to a classId, changes if you play a different
+  // class/genre. `classes` (growth/XP/lifetime stats) is the existing example.
   const classes = ref(initial.classes ?? {})   // { [classId]: { xp, tripsCompleted, distanceMeters, abilitiesUsed, poisDiscovered } }
-  const party   = ref(initial.party ?? [])      // [{ id, name, note }] — local-only, see PLANNING.md's party-onboarding phase
+
+  // "User" data — describes the real person, not the current RPG skin. Same
+  // regardless of which class/genre is active. `party` is the existing
+  // example; `savedDestinations` (Direction F) is the newest one. See
+  // PLANNING.md for the character-vs-user split this store follows when
+  // deciding where a new field belongs.
+  const party             = ref(initial.party ?? [])             // [{ id, name, note }] — local-only, see PLANNING.md's party-onboarding phase
+  const savedDestinations = ref(initial.savedDestinations ?? []) // [{ id, label, lat, lng }] — local-only, no geocoding
 
   function persist() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ classes: classes.value, party: party.value }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      classes: classes.value, party: party.value, savedDestinations: savedDestinations.value,
+    }))
   }
 
   function progressFor(classId) {
@@ -128,11 +139,47 @@ export const useProfileStore = defineStore('profile', () => {
     persist()
   }
 
+  // Direction F, phase 1: a persisted place list — no reverse geocoding
+  // available (no extra backend for it, same "don't fake support" stance as
+  // navigation.js's tolls preference), so a save gets a placeholder label
+  // rather than a guessed address; `renameSavedDestination` is how it becomes
+  // "Home" instead of "Saved Destination" — see ProfileScreen.vue's inline
+  // rename input.
+  function addSavedDestination(lat, lng, label = 'Saved Destination') {
+    const entry = { id: crypto.randomUUID(), label, lat, lng }
+    savedDestinations.value = [...savedDestinations.value, entry]
+    persist()
+    return entry
+  }
+
+  function removeSavedDestination(id) {
+    savedDestinations.value = savedDestinations.value.filter(d => d.id !== id)
+    persist()
+  }
+
+  function renameSavedDestination(id, label) {
+    const entry = savedDestinations.value.find(d => d.id === id)
+    if (!entry) return
+    entry.label = label
+    persist()
+  }
+
+  // Used by HudOverlay.vue's save-star toggle to show filled/hollow without
+  // needing its own id-tracking — floating-point lat/lng from two different
+  // sources (a fresh OSRM-adjacent tap vs. a stored value) are compared with
+  // a small tolerance rather than exact equality.
+  function findSavedDestinationNear(lat, lng, epsilon = 0.0001) {
+    return savedDestinations.value.find(
+      d => Math.abs(d.lat - lat) < epsilon && Math.abs(d.lng - lng) < epsilon,
+    ) ?? null
+  }
+
   return {
-    classes, party,
+    classes, party, savedDestinations,
     progressFor, levelOf, xpProgressOf,
     recordAbilityUsed, recordPOIsDiscovered, recordTripCompleted,
     powerMultiplier, cooldownMultiplier,
     addPartyMember, removePartyMember,
+    addSavedDestination, removeSavedDestination, renameSavedDestination, findSavedDestinationNear,
   }
 })

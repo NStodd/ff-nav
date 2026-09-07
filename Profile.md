@@ -1,4 +1,4 @@
-# Profile — growth, stat effects, and the party roster
+# Profile — growth, stat effects, the party roster, and saved destinations
 
 This describes `src/stores/profile.js`: the durable, cross-session layer that sits alongside `player.js` (current genre/class choice) and `navigation.js` (live map state). It's reference documentation for the current implementation, not a changelog — see `PLANNING.md` §16 for the build history.
 
@@ -26,7 +26,10 @@ This is also why `pois` (in `navigation.js`, ephemeral, wiped by the Sovereign a
     },
   },
   party: [
-    { id, name, note },        // local-only roster — see "The party roster" below
+    { id, name, note },              // local-only roster — see "The party roster" below
+  ],
+  savedDestinations: [
+    { id, label, lat, lng },         // local-only place list — see "Saved destinations" below
   ],
 }
 ```
@@ -34,6 +37,8 @@ This is also why `pois` (in `navigation.js`, ephemeral, wiped by the Sovereign a
 Progress is keyed by class **id**, not by genre+class — every class id is already unique across all four genres' rosters (checked: no collisions), so a player's history with, say, `fighter` stays `fighter`'s regardless of which genre they picked it from. This also means the same class id always shares one progression line even if that's never actually exercised today (each genre's rosters use disjoint ids).
 
 `progressFor(classId)` lazily creates a blank entry on first read — nothing needs to pre-seed all sixteen classes up front.
+
+**Two kinds of data live in this one store, and the split matters when adding new fields.** `classes` is **character** data — scoped to a class id, and it's a different bucket depending on which class you're currently playing. `party` and `savedDestinations` are **user** data — they describe the real person, not the current RPG skin, and don't change no matter which class/genre is active. The test for a new field: does it depend on which class is chosen right now? If yes, it's character data and belongs inside `classes[classId]`; if no, it's user data and belongs at the top level next to `party`. Both kinds still read back through `??` defaults (`initial.party ?? []`, `initial.savedDestinations ?? []`) rather than a version-checked migration — fine for purely additive fields; a genuinely breaking shape change would need an actual migration step, which nothing here has needed yet.
 
 ---
 
@@ -82,6 +87,16 @@ This didn't exist anywhere in the codebase before this pass — `navigation.js` 
 `addPartyMember(name, note)` / `removePartyMember(id)` manage a plain local array — no accounts, no sync, no live location of anyone but the player. Two places call them: `ProfileScreen.vue` (ongoing management) and, since this pass, a dedicated **`PartyStep.vue`** onboarding step — `'party'` in `onboardingSteps`, present on all sixteen classes now, positioned right after the ability reveal (and after `personalize` for the four FF classes that have one). Every class has its own `partyPrompt` flavor line in the same voice as its `intro`/`locationPrompt` (bold for Adventurer, terse for Speedrunner, warm for Connector, ominous-and-skippable for Sovereign — a Black Mage/Overseer/Outlaw/Captain's prompt leans into reluctance rather than pretending privacy-focused classes are suddenly social). The step is never mandatory: "Continue" only requires the typewriter to finish, not that anyone actually got added.
 
 `shareETA()` now reads the roster too — pass it a `party` array and the share text addresses the first member by name (`"Sarah — I'm on my way — ETA 12 min."`) instead of staying generic; multiple members get `"<first> & co."`. `MapScreen.vue` passes `profile.party` through when a Connector-archetype ability fires, the same "caller passes the cross-store data in, this store doesn't reach into another store itself" convention as `prefs`/`interestText` elsewhere in `navigation.js`.
+
+---
+
+## Saved destinations
+
+Direction F's first phase: a persisted place list, independent of genre/class (user data, per the split above). `addSavedDestination(lat, lng, label)` / `removeSavedDestination(id)` / `renameSavedDestination(id, label)` manage it; `findSavedDestinationNear(lat, lng, epsilon)` does a small-tolerance coordinate match (not exact float equality) so the UI can tell whether the *current* destination is already saved.
+
+**Saving happens from the map, loading happens from the profile screen — deliberately not the same place.** `HudOverlay.vue` shows a small ☆/★ toggle next to the ETA readout, visible only once `navigation.destination` is set — a glanceable icon-state, not a labeled button competing with the ability button for attention. Tapping it calls `addSavedDestination`/`removeSavedDestination` directly; there's no toast, since the icon's own fill state is the confirmation. Picking a saved place to actually navigate to is a real navigation to `ProfileScreen.vue`'s "SAVED PLACES" section, same reasoning as everywhere else in this app since Milestone 5: choosing among several saved places is a "go look at a list" action, not something to cram into a map overlay while driving.
+
+**No reverse geocoding** — there's no extra backend for it, the same "don't fake support" stance `navigation.js`'s `tolls` preference already takes. A save defaults to the label `"Saved Destination"`; `ProfileScreen.vue` renders the label as a plain `<input>` (not a separate "rename" mode) so turning it into "Home" is a one-field edit, persisted on `change`.
 
 ---
 

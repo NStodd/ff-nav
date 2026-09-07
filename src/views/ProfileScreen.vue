@@ -90,6 +90,26 @@
           <PixelButton :classColor="store.chosenClass.color" :disabled="!newName.trim()">ADD</PixelButton>
         </form>
       </section>
+
+      <section class="saved-places">
+        <h2>SAVED PLACES</h2>
+        <p class="hint">Destinations worth keeping — home, work, anywhere you'd rather pick from a list than tap the map again. No addresses looked up automatically, so name each one yourself.</p>
+
+        <div v-if="profile.savedDestinations.length" class="places-list">
+          <div v-for="dest in profile.savedDestinations" :key="dest.id" class="place-entry">
+            <input
+              class="place-label"
+              :value="dest.label"
+              @change="profile.renameSavedDestination(dest.id, $event.target.value)"
+              maxlength="32"
+            />
+            <span class="place-coords">{{ dest.lat.toFixed(4) }}, {{ dest.lng.toFixed(4) }}</span>
+            <PixelButton variant="ghost" :classColor="store.chosenClass.color" @click="goToSaved(dest)">GO</PixelButton>
+            <button class="remove-btn" @click="profile.removeSavedDestination(dest.id)" aria-label="Remove">&times;</button>
+          </div>
+        </div>
+        <p v-else class="empty-hint">Nothing saved yet — tap the ☆ next to your ETA on the map to save your current destination.</p>
+      </section>
     </div>
   </div>
 </template>
@@ -99,15 +119,17 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePlayerStore } from '@/stores/player.js'
 import { useProfileStore } from '@/stores/profile.js'
+import { useNavigationStore } from '@/stores/navigation.js'
 import { findClassById } from '@/data/genres.js'
 import StarField from '@/components/StarField.vue'
 import PixelDivider from '@/components/PixelDivider.vue'
 import PixelButton from '@/components/PixelButton.vue'
 import PixelSprite from '@/components/PixelSprite.vue'
 
-const router  = useRouter()
-const store   = usePlayerStore()
-const profile = useProfileStore()
+const router      = useRouter()
+const store       = usePlayerStore()
+const profile     = useProfileStore()
+const navigation  = useNavigationStore()
 
 const progress = computed(() => profile.xpProgressOf(store.chosenClass.id))
 const current  = computed(() => profile.progressFor(store.chosenClass.id))
@@ -138,6 +160,15 @@ function addMember() {
   profile.addPartyMember(newName.value.trim(), newNote.value.trim())
   newName.value = ''
   newNote.value = ''
+}
+
+// Direction F, phase 1: picking a saved destination is a real navigation,
+// same as every other "leave this screen" action here — not a mid-map
+// dropdown, consistent with the driver-attention principle this app has
+// followed since Milestone 5.
+function goToSaved(dest) {
+  navigation.setDestination({ lat: dest.lat, lng: dest.lng }, store.preferences)
+  router.push({ name: 'map', params: { genreId: store.chosenGenre.id } })
 }
 </script>
 
@@ -419,5 +450,48 @@ h2 {
 .name-input::placeholder,
 .note-input::placeholder {
   color: var(--ff-muted);
+}
+
+.saved-places {
+  width: 100%;
+}
+
+.places-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.place-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--ff-panel);
+  border: 1px solid var(--ff-border);
+  flex-wrap: wrap;
+}
+
+.place-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 6px 8px;
+  background: var(--ff-dark);
+  border: 1px solid var(--ff-border);
+  color: var(--ff-text);
+  flex: 1;
+  min-width: 100px;
+}
+
+.place-label:focus {
+  outline: none;
+  border-color: var(--ff-gold-dark);
+}
+
+.place-coords {
+  font-size: 6px;
+  color: var(--ff-muted);
+  flex-shrink: 0;
 }
 </style>

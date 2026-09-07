@@ -22,6 +22,19 @@
         <span class="eta-value">{{ navigation.etaFormatted ?? '—' }}</span>
       </div>
 
+      <!-- Direction F, phase 1: saved destinations. Only shown once there's
+           something to save — an icon-only toggle rather than a labeled
+           button, so it reads as a small glanceable state (filled vs hollow
+           star) rather than one more thing competing for attention next to
+           the ability button. -->
+      <button
+        v-if="navigation.destination"
+        class="save-star"
+        :class="{ saved: !!savedEntry }"
+        @click="toggleSaved"
+        :aria-label="savedEntry ? 'Remove saved destination' : 'Save this destination'"
+      >{{ savedEntry ? '★' : '☆' }}</button>
+
       <AbilityButton
         :label="store.chosenClass.ability"
         :classColor="store.chosenClass.color"
@@ -33,8 +46,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { usePlayerStore } from '@/stores/player.js'
 import { useNavigationStore } from '@/stores/navigation.js'
+import { useProfileStore } from '@/stores/profile.js'
 import PixelSprite from '@/components/PixelSprite.vue'
 import AbilityButton from '@/components/AbilityButton.vue'
 
@@ -47,6 +62,19 @@ defineEmits(['ability'])
 
 const store      = usePlayerStore()
 const navigation = useNavigationStore()
+const profile    = useProfileStore()
+
+const savedEntry = computed(() => {
+  const dest = navigation.destination
+  return dest ? profile.findSavedDestinationNear(dest.lat, dest.lng) : null
+})
+
+function toggleSaved() {
+  const dest = navigation.destination
+  if (!dest) return
+  if (savedEntry.value) profile.removeSavedDestination(savedEntry.value.id)
+  else profile.addSavedDestination(dest.lat, dest.lng)
+}
 </script>
 
 <style scoped>
@@ -134,5 +162,23 @@ const navigation = useNavigationStore()
 .eta-value {
   font-size: 9px;
   color:     var(--cc);
+}
+
+.save-star {
+  background:  none;
+  border:      none;
+  padding:     0 2px;
+  cursor:      pointer;
+  font-size:   18px;
+  line-height: 1;
+  color:       var(--ff-muted);
+}
+
+.save-star.saved {
+  color: var(--ff-gold);
+}
+
+.save-star:hover {
+  color: var(--cc);
 }
 </style>
