@@ -57,6 +57,7 @@ This repo's docs are reference material for how things actually work, not just a
 | Doc | Covers |
 |---|---|
 | [`Genres.md`](Genres.md) | The genre/class architecture and the recipe for adding a new genre |
+| [`Sprites.md`](Sprites.md) | The pixel-sprite format and a step-by-step guide to hand-drawing new ones |
 | [`Navigation.md`](Navigation.md) | The navigation store, MapLibre integration, and the HUD layer |
 | [`Profile.md`](Profile.md) | Growth (XP/levels/stat effects), arrival detection, the party roster |
 | [`PRODUCTION.md`](PRODUCTION.md) | What's release-blocking vs. an acceptable v1 limitation before shipping for real |

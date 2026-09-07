@@ -8,6 +8,68 @@
         <p class="hint">A living design-review page, not a one-off mockup. "Live now" sections reflect what's actually in the class data files today; "considered" sections are candidates that didn't get adopted (anywhere, or for that specific genre) — kept for reference, not wired into anything.</p>
       </header>
 
+      <section class="sandbox">
+        <h2>Sprite sandbox — build your own</h2>
+        <p class="hint">Paste or type rows using the same character vocabulary every class's <code>sprite:</code> array already uses — <code>0</code> transparent, <code>1</code> the previewed color, <code>2</code> skin, <code>w</code> white, <code>g</code> gray, <code>G</code> gold, <code>d</code> dark. One row per line; rows don't need to match lengths (several live sprites already mix them). Nothing here touches real game data until you paste the result into a class file yourself.</p>
+
+        <div class="sandbox-controls">
+          <label>Start from
+            <select v-model="sandboxStartId">
+              <option value="">— blank canvas —</option>
+              <option v-for="opt in CLASS_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </label>
+          <PixelButton variant="ghost" @click="loadStart">LOAD</PixelButton>
+          <span class="hint sub" style="margin:0;">Loading a real class's sprite as a base to mutate — same approach the adopted alternate poses used (see Genres.md) — is usually easier than drawing free-hand.</span>
+        </div>
+
+        <div class="sandbox-body">
+          <textarea
+            v-model="sandboxText"
+            class="sandbox-textarea"
+            spellcheck="false"
+            rows="14"
+          />
+
+          <div class="sandbox-preview">
+            <div class="sandbox-preview-swatches">
+              <label>Color <input type="color" v-model="sandboxColor" /></label>
+              <div class="size-buttons">
+                <button
+                  v-for="sz in [4, 6, 8, 10, 12]"
+                  :key="sz"
+                  type="button"
+                  :class="{ active: sandboxPixelSize === sz }"
+                  @click="sandboxPixelSize = sz"
+                >{{ sz }}px</button>
+              </div>
+            </div>
+
+            <div class="sandbox-canvas-wrap">
+              <PixelSprite :rows="sandboxRows" :color="sandboxColor" :pixelSize="sandboxPixelSize" />
+            </div>
+
+            <p class="hint sub">At the actual sizes used in the app (profile list 3px, class-select card 4px, ability-reveal 5px, HUD/welcome 6px, done/profile 8px) — check legibility here, not just at the size above, especially the small end:</p>
+            <div class="sandbox-real-sizes">
+              <div v-for="sz in [3, 4, 5, 6, 8]" :key="sz" class="real-size-cell">
+                <PixelSprite :rows="sandboxRows" :color="sandboxColor" :pixelSize="sz" />
+                <span>{{ sz }}px</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p v-if="sandboxWarnings.length" class="sandbox-warning">
+          <span v-for="w in sandboxWarnings" :key="w">{{ w }}<br /></span>
+        </p>
+
+        <div class="sandbox-actions">
+          <PixelButton @click="copyAsArray">COPY AS JS ARRAY</PixelButton>
+          <span v-if="copyStatus" class="copy-status">{{ copyStatus }}</span>
+        </div>
+        <pre class="sandbox-output">{{ formattedArray }}</pre>
+      </section>
+
       <section>
         <h2>POI category icons — live now</h2>
         <p class="hint">Wired into <code>MapScreen.vue</code>'s <code>poiMarkerEl()</code>. Tinted to the active class's color like every other marker; shown here at a fixed gold tint for a neutral comparison, and again in each genre's brand color to check they hold up across the palette.</p>
@@ -71,11 +133,84 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 import StarField from '@/components/StarField.vue'
 import PixelSprite from '@/components/PixelSprite.vue'
+import PixelButton from '@/components/PixelButton.vue'
 import { GENRES } from '@/data/genres.js'
 import { POI_ICONS, ICON_CANDIDATES } from '@/data/poiIcons.js'
 import { ARCHETYPES } from '@/data/spriteAlternates.js'
+
+// --- Sprite sandbox ---------------------------------------------------
+// A scratch space for hand-drawn sprites that never touches real class data
+// — everything here lives in local component state until someone copies the
+// result out and pastes it into a class file themselves.
+
+// 9 cols x 12 rows matches the convention every shipped sprite already uses
+// (see CLAUDE.md's original spec and every class file since) — not a hard
+// requirement (PixelSprite.vue sizes its canvas off whatever's given), just
+// a sane default canvas to start drawing on.
+const BLANK_TEMPLATE = Array(12).fill('000000000').join('\n')
+
+const CLASS_OPTIONS = GENRES.flatMap((genre) =>
+  (genre.classes ?? []).map((cls) => ({
+    value: `${genre.id}:${cls.id}`,
+    label: `${genre.name} — ${cls.name}`,
+    rows:  cls.sprite,
+    color: cls.color,
+  })),
+)
+
+const sandboxStartId    = ref('')
+const sandboxText       = ref(BLANK_TEMPLATE)
+const sandboxColor      = ref('#F0C060')
+const sandboxPixelSize  = ref(8)
+const copyStatus        = ref(null)
+let copyStatusTimer = null
+
+const sandboxRows = computed(() => sandboxText.value.replace(/\r\n/g, '\n').split('\n'))
+
+const VALID_SPRITE_CHARS = new Set(['0', '1', '2', 'w', 'g', 'G', 'd'])
+const sandboxWarnings = computed(() => {
+  const warnings = []
+  sandboxRows.value.forEach((row, i) => {
+    for (const ch of row) {
+      if (!VALID_SPRITE_CHARS.has(ch)) {
+        warnings.push(`Row ${i + 1}: '${ch}' isn't a recognized character — it'll render as white, which is probably not what you meant. Expected one of 0 1 2 w g G d.`)
+        break // one warning per row is plenty
+      }
+    }
+  })
+  return warnings
+})
+
+const formattedArray = computed(() => {
+  const body = sandboxRows.value.map((r) => `  '${r.replace(/'/g, "\\'")}',`).join('\n')
+  return `[\n${body}\n]`
+})
+
+function loadStart() {
+  if (!sandboxStartId.value) {
+    sandboxText.value  = BLANK_TEMPLATE
+    sandboxColor.value = '#F0C060'
+    return
+  }
+  const opt = CLASS_OPTIONS.find((o) => o.value === sandboxStartId.value)
+  if (!opt) return
+  sandboxText.value  = opt.rows.join('\n')
+  sandboxColor.value = opt.color
+}
+
+async function copyAsArray() {
+  if (copyStatusTimer) clearTimeout(copyStatusTimer)
+  try {
+    await navigator.clipboard.writeText(formattedArray.value)
+    copyStatus.value = 'Copied — paste into a class\'s sprite: field.'
+  } catch {
+    copyStatus.value = 'Could not copy automatically — select the text below by hand.'
+  }
+  copyStatusTimer = setTimeout(() => { copyStatus.value = null }, 4000)
+}
 
 const ARCHETYPE_INDEX = { adventurer: 0, speedrunner: 1, connector: 2, sovereign: 3 }
 
@@ -277,5 +412,165 @@ h3 {
   padding: 0.5rem;
   background: var(--ff-panel);
   border: 2px solid var(--ff-border);
+}
+
+/* --- Sprite sandbox --- */
+
+.sandbox-controls {
+  display:    flex;
+  align-items: center;
+  gap:        0.75rem;
+  flex-wrap:  wrap;
+  margin:     0.75rem 0 1.25rem;
+}
+
+.sandbox-controls label {
+  display:     flex;
+  align-items: center;
+  gap:         8px;
+  font-size:   7px;
+  color:       var(--ff-muted);
+}
+
+.sandbox-controls select {
+  font-family: 'Press Start 2P', monospace;
+  font-size:   7px;
+  padding:     8px;
+  background:  var(--ff-panel);
+  color:       var(--ff-text);
+  border:      2px solid var(--ff-border);
+}
+
+.sandbox-body {
+  display:     flex;
+  gap:         1.5rem;
+  flex-wrap:   wrap;
+  align-items: flex-start;
+}
+
+.sandbox-textarea {
+  flex:            1 1 260px;
+  min-width:       220px;
+  min-height:      280px;
+  padding:         12px;
+  background:      var(--ff-dark);
+  color:           var(--ff-text);
+  border:          2px solid var(--ff-border);
+  font-family:     'Consolas', 'Courier New', monospace;
+  font-size:       13px;
+  line-height:     1.5;
+  letter-spacing:  0.05em;
+  resize:          vertical;
+}
+
+.sandbox-textarea:focus {
+  outline:      none;
+  border-color: var(--ff-gold-dark);
+}
+
+.sandbox-preview {
+  flex:           1 1 260px;
+  display:        flex;
+  flex-direction: column;
+  gap:            0.85rem;
+  padding:        1rem;
+  background:     var(--ff-panel);
+  border:         2px solid var(--ff-border);
+}
+
+.sandbox-preview-swatches {
+  display:     flex;
+  align-items: center;
+  gap:         1rem;
+  flex-wrap:   wrap;
+}
+
+.sandbox-preview-swatches label {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  font-size:   7px;
+  color:       var(--ff-muted);
+}
+
+.size-buttons {
+  display: flex;
+  gap:     4px;
+}
+
+.size-buttons button {
+  font-family: 'Press Start 2P', monospace;
+  font-size:   6px;
+  padding:     6px 8px;
+  background:  var(--ff-dark);
+  color:       var(--ff-muted);
+  border:      1px solid var(--ff-border);
+  cursor:      pointer;
+}
+
+.size-buttons button.active {
+  color:        var(--ff-gold);
+  border-color: var(--ff-gold-dark);
+}
+
+.sandbox-canvas-wrap {
+  display:         flex;
+  justify-content: center;
+  padding:         1.25rem;
+  background:      var(--ff-night);
+  border:          1px solid var(--ff-border);
+}
+
+.sandbox-real-sizes {
+  display:         flex;
+  gap:             1.5rem;
+  justify-content: center;
+  align-items:     flex-end;
+}
+
+.real-size-cell {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            0.3rem;
+}
+
+.real-size-cell span {
+  font-size: 6px;
+  color:     var(--ff-muted);
+}
+
+.sandbox-warning {
+  font-size:   7px;
+  color:       #E85C5C;
+  line-height: 1.9;
+  margin-top:  0.75rem;
+}
+
+.sandbox-actions {
+  display:     flex;
+  align-items: center;
+  gap:         0.75rem;
+  flex-wrap:   wrap;
+  margin-top:  1rem;
+}
+
+.copy-status {
+  font-size: 7px;
+  color:     var(--ff-gold);
+}
+
+.sandbox-output {
+  margin-top:      0.75rem;
+  padding:         12px;
+  background:      var(--ff-dark);
+  border:          2px solid var(--ff-border);
+  font-family:     'Consolas', 'Courier New', monospace;
+  font-size:       11px;
+  line-height:     1.5;
+  color:           var(--ff-text);
+  white-space:     pre;
+  overflow-x:      auto;
+  max-height:      240px;
 }
 </style>
