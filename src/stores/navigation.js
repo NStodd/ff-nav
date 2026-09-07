@@ -55,6 +55,68 @@ function haversineMeters(a, b) {
 const HIGHWAY_PATTERN = /\b(I[-\s]?\d+|US[-\s]?\d+|Interstate|Expressway|Freeway|Turnpike|Motorway)\b/i
 const NON_TURN_MANEUVERS = new Set(['depart', 'arrive', 'continue', 'new name'])
 
+// Turn-by-turn (Direction F, phase 2). OSRM's `steps=true` response is
+// already being fetched for analyzeRoute()/pickRoute()'s scoring above —
+// this reuses the exact same data instead of a second request, just keeps
+// it around afterward instead of discarding it once scoring is done.
+function flattenSteps(route) {
+  return (route.legs ?? []).flatMap(leg => leg.steps ?? [])
+}
+
+function maneuverLatLng(step) {
+  const [lng, lat] = step.maneuver.location
+  return { lat, lng }
+}
+
+// OSRM's route API returns maneuver.type/modifier, not a ready-made English
+// sentence (that needs a language plugin the public demo doesn't run) — same
+// "build our own small mapping instead of assuming server support" approach
+// pickRoute()'s highway/ferry detection already takes. Deliberately terse:
+// this is read at a glance, not read in full, per the driver-attention
+// principle everywhere else in this app.
+function describeManeuver(step) {
+  const { type, modifier } = step.maneuver
+  const name = step.name || null
+  const onward = name ? ` onto ${name}` : ''
+  switch (type) {
+    case 'arrive':    return 'Arrive at your destination'
+    case 'depart':    return `Head onto ${name || 'the route'}`
+    case 'roundabout':
+    case 'rotary':    return `Enter the roundabout${step.maneuver.exit ? `, take exit ${step.maneuver.exit}` : ''}`
+    case 'merge':     return `Merge${onward}`
+    case 'fork':      return `Keep ${modifier || 'straight'} at the fork${onward}`
+    case 'turn':
+      if (modifier === 'straight') return `Continue${onward}`
+      if (modifier === 'uturn')    return `Make a U-turn${onward}`
+      return `Turn ${modifier || ''}${onward}`.replace(/\s+/g, ' ').trim()
+    case 'continue':
+    case 'new name':  return `Continue${onward}`
+    default:          return onward ? `Continue${onward}` : 'Continue'
+  }
+}
+
+// Buckets OSRM's 8 modifiers down to the handful of icons actually worth
+// drawing distinctly — see maneuverIcons.js. Nuance ("slight" vs "sharp")
+// stays in the text, not the icon; a pixel arrow can't read that finely at
+// HUD size anyway.
+function maneuverIconKey(step) {
+  const { type, modifier } = step.maneuver
+  if (type === 'arrive') return 'arrive'
+  if (type === 'roundabout' || type === 'rotary') return 'roundabout'
+  if (type === 'merge') return 'merge'
+  if (modifier === 'uturn') return 'uturn'
+  if (modifier && modifier.includes('left')) return 'left'
+  if (modifier && modifier.includes('right')) return 'right'
+  return 'straight'
+}
+
+// How close counts as "you've reached this maneuver, start counting down to
+// the next one." A threshold-based advance, not full map-matching (projecting
+// live position onto the route polyline) — a meaningfully bigger algorithm
+// than this pass needs; honest about being an approximation the same way
+// pickRoute()'s highway/ferry regexes are.
+const STEP_ADVANCE_RADIUS_M = 30
+
 function analyzeRoute(route) {
   let turns = 0
   let highwaySteps = 0
@@ -125,6 +187,13 @@ export const useNavigationStore = defineStore('navigation', () => {
   const routeDistanceMeters = ref(null) // OSRM's `distance` field for the current route — used to size trip-completion XP
   const tripJustCompleted   = ref(null) // { distanceMeters } | null — see the position watcher and acknowledgeTripCompletion() below
 
+  // Turn-by-turn state. `steps` is the flattened OSRM steps array for the
+  // *current* route (cleared/replaced whenever `route` itself is); nothing
+  // external should need to touch `currentStepIndex` directly, hence
+  // `currentManeuver` (below) as the only piece of this actually exposed.
+  const steps            = ref([])
+  const currentStepIndex = ref(0)
+
   // Single source of truth for persisting `destination` — every path that
   // sets it (setDestination(), the arrival watcher, goDark(), reset()) just
   // assigns `destination.value` directly and this keeps localStorage in sync
@@ -140,6 +209,41 @@ export const useNavigationStore = defineStore('navigation', () => {
     if (eta.value == null) return null
     const mins = Math.round(eta.value / 60)
     return mins < 1 ? '<1 min' : `${mins} min`
+  })
+
+  // The one piece of turn-by-turn state anything outside this store reads —
+  // TurnByTurnBanner.vue renders exactly this shape. `null` whenever there's
+  // no route or no position fix yet (nothing meaningful to show either way).
+  const currentManeuver = computed(() => {
+    if (!steps.value.length) return null
+    const step = steps.value[Math.min(currentStepIndex.value, steps.value.length - 1)]
+    const distanceMeters = position.value
+      ? Math.round(haversineMeters(position.value, maneuverLatLng(step)))
+      : Math.round(step.distance ?? 0)
+    return {
+      iconKey:       maneuverIconKey(step),
+      instruction:   describeManeuver(step),
+      distanceMeters,
+      isArrival:     step.maneuver.type === 'arrive',
+    }
+  })
+
+  // Advances currentStepIndex once live position closes to within
+  // STEP_ADVANCE_RADIUS_M of the maneuver it's currently counting down to —
+  // see that constant's comment for why this is threshold-based rather than
+  // full map-matching. Index 0 (OSRM's "depart" step, not yet an actionable
+  // instruction) is skipped whenever there's at least one real maneuver
+  // after it, so the banner never opens by announcing the step you're
+  // already standing on.
+  watch([position, steps], ([pos, stepList]) => {
+    if (!pos || !stepList.length) return
+    if (currentStepIndex.value === 0 && stepList.length > 1) currentStepIndex.value = 1
+    while (
+      currentStepIndex.value < stepList.length - 1 &&
+      haversineMeters(pos, maneuverLatLng(stepList[currentStepIndex.value])) <= STEP_ADVANCE_RADIUS_M
+    ) {
+      currentStepIndex.value++
+    }
   })
 
   function setPosition(latLng) {
@@ -200,6 +304,8 @@ export const useNavigationStore = defineStore('navigation', () => {
       route.value = best.geometry.coordinates
       eta.value   = best.duration
       routeDistanceMeters.value = best.distance ?? null
+      steps.value = flattenSteps(best)
+      currentStepIndex.value = 0
       routeError.value = null
     } catch (err) {
       if (!_isRetry) {
@@ -242,6 +348,8 @@ export const useNavigationStore = defineStore('navigation', () => {
       route.value = []
       eta.value = null
       routeDistanceMeters.value = null
+      steps.value = []
+      currentStepIndex.value = 0
     }
   })
 
@@ -338,6 +446,13 @@ export const useNavigationStore = defineStore('navigation', () => {
       route.value = alt.geometry.coordinates
       eta.value   = alt.duration
       routeDistanceMeters.value = alt.distance ?? null
+      // A reroute mid-trip needs its turn-by-turn state reset too — the old
+      // steps array belongs to a route that's no longer being followed, and
+      // resuming from index 0 (skipped up to 1 by the watcher above on the
+      // very next position update) is simpler and safer than trying to guess
+      // which of the new route's steps correspond to progress already made.
+      steps.value = flattenSteps(alt)
+      currentStepIndex.value = 0
       return true
     } catch {
       return false
@@ -415,6 +530,8 @@ export const useNavigationStore = defineStore('navigation', () => {
     eta.value         = null
     position.value    = null
     routeDistanceMeters.value = null
+    steps.value       = []
+    currentStepIndex.value = 0
     stopWatching()
     privacyActive.value = true
     if (privacyTimer) clearTimeout(privacyTimer)
@@ -433,6 +550,8 @@ export const useNavigationStore = defineStore('navigation', () => {
     pois.value        = []
     routeDistanceMeters.value = null
     tripJustCompleted.value   = null
+    steps.value       = []
+    currentStepIndex.value = 0
     if (shareStatusTimer) clearTimeout(shareStatusTimer)
     shareStatus.value = null
     if (routeErrorTimer) clearTimeout(routeErrorTimer)
@@ -446,7 +565,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     position, destination, route, eta, pois, revealing, rerouting, fetchingRoute,
     shareStatus, routeError, privacyActive,
     routeDistanceMeters, tripJustCompleted,
-    hasRoute, etaFormatted,
+    hasRoute, etaFormatted, currentManeuver,
     setPosition, startWatching, stopWatching, setDestination, fetchRoute,
     revealPOIs, attemptReroute, shareETA, goDark, acknowledgeTripCompletion, reset,
   }

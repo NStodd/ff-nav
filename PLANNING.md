@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§23) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§24) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -398,6 +398,21 @@ First piece of Direction F (deepening real navigation capability — saved desti
 
 **Verified with Playwright against the real dev server**: set a destination via a map click, confirmed the star appeared hollow then filled on click with the correct entry persisted to `localStorage`; navigated to the profile screen and confirmed the entry rendered with the right coordinates; renamed it to "Home" and confirmed the persisted label updated; clicked `GO` and confirmed it navigated back to the map with that exact destination set (and the star immediately showing filled, since it's now recognized as the same saved place); removed it and confirmed the list emptied back to the "nothing saved yet" hint. Zero console/page errors.
 
+### 24. Direction F, phase 2: turn-by-turn
+
+**Files created:** `src/data/maneuverIcons.js`
+**Files changed:** `src/stores/navigation.js`, `src/components/HudOverlay.vue`, `src/views/SpritePlayground.vue`
+
+Second piece of Direction F, following the spec already sketched out in §7 below: OSRM's `steps=true` data — already being fetched for `analyzeRoute()`'s scoring and discarded right after — gets retained and surfaced as a real next-maneuver readout, closing the biggest named gap between "renders a route" and "is a real navigation tool."
+
+**`navigation.js`** gained `steps`/`currentStepIndex` (internal) and one new public getter, `currentManeuver` (`{ iconKey, instruction, distanceMeters, isArrival } | null`). Advancing which step is "current" is threshold-based — a `watch([position, steps], ...)` advances the index once live position closes to within 30m of the maneuver it's counting down to — deliberately not full map-matching (projecting position onto the route's own polyline), which would be more accurate but a meaningfully bigger algorithm than this pass needs; same "disclosed heuristic instead of an unavailable bigger system" tradeoff `pickRoute()`'s highway/ferry regexes already made. `describeManeuver()` builds instruction text from `maneuver.type`/`modifier`/`name` by hand, since OSRM's API returns those fields but not a pre-built English sentence (that needs a language plugin the public demo doesn't run). Both `fetchRoute()` and `attemptReroute()` repopulate `steps` on a successful fetch; a mid-trip reroute restarts turn-by-turn from step 0 rather than trying to carry progress forward into the new route's own indices — simpler and safer than guessing, and the watcher catches back up within one position update.
+
+**`maneuverIcons.js`** — 7 pixel icons (left/right/straight/uturn/roundabout/merge/arrive), same character-per-pixel format as `poiIcons.js`/every class sprite. `right` is mirrored from `left` programmatically (`row.split('').reverse().join('')`) rather than hand-drawn twice, guaranteeing they're actually symmetric instead of two icons that were *meant* to match. A first pass, explicitly not a finished design review (same v1→maybe-v2 path `poiIcons.js` itself took) — added to `/dev/sprites`' "live now" sections at both HUD size (4px) and enlarged, for exactly that future review.
+
+**Rendered inside `HudOverlay.vue`, not a new component.** `.hud-overlay` (previously a single flex row centering `.hud-panel`) became a column flex so a `.tbt-strip` could stack above the panel using the same self-positioned fixed container, instead of a second independently-positioned element needing a guessed pixel offset to clear a panel of variable height. The icon reuses `PixelSprite.vue` directly (this is Vue-owned DOM, not a MapLibre marker, so there's no need for a third duplicate canvas-draw loop the way the map's own POI/destination markers need one). One real UI bug caught during verification: the instruction text's first pass used a single-line `text-overflow: ellipsis`, which truncated exactly the part that matters — "Turn right onto Ra…" cut off the street name itself. Fixed with `-webkit-line-clamp: 2` so it wraps instead of truncating the one piece of information a driver actually needs.
+
+**Verified with Playwright against the real dev server and live OSRM backend**: clicked a destination that produced a real 7-step route (confirmed by capturing the actual OSRM response), confirmed the strip showed "Turn right onto Ranstead Street — in 110 m" (step 1's real data, correctly skipping past the unactionable "depart" step); moved the mocked position to step 1's own maneuver coordinates and confirmed the instruction advanced to step 2's ("Turn right onto South 16th Street") — the real threshold-advance logic working against a real fetched route, not a synthetic one. Zero console/page errors.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -644,9 +659,11 @@ Playwright screenshots at 2+ phone-sized viewports (a tall handheld portrait plu
 
 ---
 
-## 7. Turn-by-turn screen (proposed)
+## 7. Turn-by-turn screen
 
-Not started. The clearest gap between "renders a route" and "is a real navigation tool": nothing today tells the player what to actually do next, only that a route and an ETA exist. OSRM's response already includes full per-step maneuver data (`steps[].maneuver.type`/`modifier`, `.distance`, `.name`) — `analyzeRoute()` (`navigation.js`, §18) already reads it for route scoring — but none of it is surfaced to the player once a route is picked. This closes that gap.
+**Implemented — see §24.** The design questions below were answered as: a persistent HUD strip (not a separate screen state), minimal detail (next maneuver + distance only, no look-ahead list), and no audio this pass. Left as-written below as the spec that was actually built against, not edited after the fact to match the implementation exactly.
+
+The clearest gap between "renders a route" and "is a real navigation tool": nothing today tells the player what to actually do next, only that a route and an ETA exist. OSRM's response already includes full per-step maneuver data (`steps[].maneuver.type`/`modifier`, `.distance`, `.name`) — `analyzeRoute()` (`navigation.js`, §18) already reads it for route scoring — but none of it is surfaced to the player once a route is picked. This closes that gap.
 
 ### Design questions to settle before building
 

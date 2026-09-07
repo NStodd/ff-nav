@@ -1,5 +1,19 @@
 <template>
   <div class="hud-overlay" :style="{ '--cc': store.chosenClass.color }">
+    <!-- Direction F, phase 2: turn-by-turn. Stacked above the existing HUD
+         panel rather than competing with the top-of-screen toast slot
+         (share/route-error/XP toasts) or needing a guessed pixel offset to
+         sit above a panel of variable height — both live in this one
+         self-positioned fixed container instead. Only rendered once there's
+         an actual next maneuver to show. -->
+    <div v-if="navigation.currentManeuver" class="tbt-strip" :class="{ arriving: navigation.currentManeuver.isArrival }">
+      <PixelSprite :rows="maneuverIcon.rows" :color="store.chosenClass.color" :pixelSize="4" />
+      <div class="tbt-text">
+        <span class="tbt-instruction">{{ navigation.currentManeuver.instruction }}</span>
+        <span class="tbt-distance">{{ tbtDistanceLabel }}</span>
+      </div>
+    </div>
+
     <div class="hud-panel">
       <div class="hud-sprite">
         <PixelSprite :rows="store.chosenClass.sprite" :color="store.chosenClass.color" :pixelSize="spriteSize" />
@@ -50,6 +64,7 @@ import { computed } from 'vue'
 import { usePlayerStore } from '@/stores/player.js'
 import { useNavigationStore } from '@/stores/navigation.js'
 import { useProfileStore } from '@/stores/profile.js'
+import { iconForManeuver } from '@/data/maneuverIcons.js'
 import PixelSprite from '@/components/PixelSprite.vue'
 import AbilityButton from '@/components/AbilityButton.vue'
 
@@ -75,6 +90,23 @@ function toggleSaved() {
   if (savedEntry.value) profile.removeSavedDestination(savedEntry.value.id)
   else profile.addSavedDestination(dest.lat, dest.lng)
 }
+
+const maneuverIcon = computed(() => iconForManeuver(navigation.currentManeuver?.iconKey))
+
+// Rounded to the nearest 10m under 1km — a driver glancing at "250 m" reads
+// it faster than "247 m", and the extra precision was never meaningful
+// anyway given this is straight-line distance to the maneuver point, not
+// distance along the road (see navigation.js's STEP_ADVANCE_RADIUS_M comment).
+function formatDistance(meters) {
+  if (meters < 1000) return `${Math.round(meters / 10) * 10} m`
+  return `${(meters / 1000).toFixed(1)} km`
+}
+
+const tbtDistanceLabel = computed(() => {
+  const m = navigation.currentManeuver?.distanceMeters
+  if (m == null) return ''
+  return m < 30 ? 'now' : `in ${formatDistance(m)}`
+})
 </script>
 
 <style scoped>
@@ -91,7 +123,9 @@ function toggleSaved() {
   inset:            auto 0 0 0;
   z-index:          2;
   display:          flex;
-  justify-content:  center;
+  flex-direction:   column;
+  align-items:      center;
+  gap:              8px;
   padding-bottom:   16px;
   pointer-events:   none;
 }
@@ -180,5 +214,56 @@ function toggleSaved() {
 
 .save-star:hover {
   color: var(--cc);
+}
+
+.tbt-strip {
+  pointer-events:  auto;
+  display:         flex;
+  align-items:     center;
+  gap:             10px;
+  padding:         8px 14px;
+  background:      color-mix(in srgb, var(--ff-panel) calc(var(--hud-panel-alpha, 0.92) * 100%), transparent);
+  backdrop-filter: blur(var(--hud-panel-blur, 6px));
+  border:          2px solid var(--cc);
+  box-shadow:      0 0 24px color-mix(in srgb, var(--cc) calc(var(--hud-glow, 0.35) * 100%), transparent);
+  font-family:     'Press Start 2P', monospace;
+}
+
+/* Gold instead of the class color for the final "arrive" instruction —
+   same accent already used for the ARRIVED trip-completion toast, so the
+   two moments read as the same kind of event. */
+.tbt-strip.arriving {
+  border-color: var(--ff-gold-dark);
+  box-shadow:   0 0 24px color-mix(in srgb, var(--ff-gold) 30%, transparent);
+}
+
+.tbt-text {
+  display:        flex;
+  flex-direction: column;
+  gap:            3px;
+  min-width:      0;
+}
+
+.tbt-instruction {
+  font-size:           9px;
+  line-height:         1.5;
+  color:               var(--ff-text);
+  max-width:           58vw;
+  /* Wraps up to 2 lines before truncating — the street name is the part a
+     driver actually needs, so it gets room to wrap rather than being cut
+     off after a few characters (as a single-line ellipsis was doing). */
+  display:             -webkit-box;
+  -webkit-line-clamp:  2;
+  -webkit-box-orient:  vertical;
+  overflow:            hidden;
+}
+
+.tbt-distance {
+  font-size: 7px;
+  color:     var(--cc);
+}
+
+.arriving .tbt-distance {
+  color: var(--ff-gold);
 }
 </style>

@@ -107,6 +107,26 @@
         </div>
       </section>
 
+      <section>
+        <h2>Turn-by-turn maneuver icons — live now</h2>
+        <p class="hint">Wired into <code>HudOverlay.vue</code>'s turn-by-turn strip (via <code>maneuverIcons.js</code>), tinted to the active class's color like every other HUD element. A first pass, not a finished design review — shown here at both HUD size (4px) and enlarged so the shapes are actually easy to judge.</p>
+        <div class="icon-grid">
+          <div v-for="(icon, key) in MANEUVER_ICONS" :key="key" class="icon-cell">
+            <canvas :ref="(el) => drawIcon(el, icon.rows, '#F0C060')" class="icon-canvas" />
+            <span class="icon-label">{{ icon.label }}</span>
+          </div>
+        </div>
+        <p class="hint sub">At the actual HUD size (4px):</p>
+        <div class="icon-genre-row">
+          <canvas
+            v-for="(icon, key) in MANEUVER_ICONS"
+            :key="key"
+            :ref="(el) => drawIcon(el, icon.rows, '#F0C060', 4)"
+            class="icon-canvas small"
+          />
+        </div>
+      </section>
+
       <section v-for="archetype in ARCHETYPES" :key="archetype.id">
         <h2>{{ archetype.label }} archetype — live now</h2>
         <div class="alt-sprites">
@@ -139,6 +159,7 @@ import PixelSprite from '@/components/PixelSprite.vue'
 import PixelButton from '@/components/PixelButton.vue'
 import { GENRES } from '@/data/genres.js'
 import { POI_ICONS, ICON_CANDIDATES } from '@/data/poiIcons.js'
+import { MANEUVER_ICONS } from '@/data/maneuverIcons.js'
 import { ARCHETYPES } from '@/data/spriteAlternates.js'
 
 // --- Sprite sandbox ---------------------------------------------------
