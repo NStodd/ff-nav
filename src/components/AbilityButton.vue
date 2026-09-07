@@ -5,13 +5,16 @@
     :disabled="disabled || cooling"
     @click="trigger"
   >
-    <span class="ability-label">{{ label }}</span>
+    <span class="ability-label">
+      {{ label }}
+      <span v-if="cooling" class="cooldown-timer">{{ remainingSeconds }}s</span>
+    </span>
     <span v-if="cooling" class="cooldown-veil" :style="{ width: (100 - cooldownPct) + '%' }" />
   </button>
 </template>
 
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 
 const props = defineProps({
   label:      { type: String,  required: true },
@@ -49,6 +52,14 @@ function startCooldown() {
   rafId = requestAnimationFrame(tick)
 }
 
+// Milestone 6: the veil alone communicates "still cooling down" but not "how
+// much longer" — a numeric readout answers that at a glance, worth it for
+// classes/levels whose cooldown runs long enough that judging a bare color
+// sweep is actually hard.
+const remainingSeconds = computed(() =>
+  Math.max(0, Math.ceil((props.cooldownMs * (100 - cooldownPct.value) / 100) / 1000))
+)
+
 onUnmounted(() => { if (rafId) cancelAnimationFrame(rafId) })
 
 defineExpose({ startCooldown })
@@ -82,6 +93,13 @@ defineExpose({ startCooldown })
 .ability-label {
   position: relative;
   z-index:  1;
+}
+
+.cooldown-timer {
+  display:    block;
+  font-size:  7px;
+  color:      var(--ff-muted);
+  margin-top: 2px;
 }
 
 .cooldown-veil {

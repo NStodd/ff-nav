@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§24) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§25) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -413,6 +413,23 @@ Second piece of Direction F, following the spec already sketched out in §7 belo
 
 **Verified with Playwright against the real dev server and live OSRM backend**: clicked a destination that produced a real 7-step route (confirmed by capturing the actual OSRM response), confirmed the strip showed "Turn right onto Ranstead Street — in 110 m" (step 1's real data, correctly skipping past the unactionable "depart" step); moved the mocked position to step 1's own maneuver coordinates and confirmed the instruction advanced to step 2's ("Turn right onto South 16th Street") — the real threshold-advance logic working against a real fetched route, not a synthetic one. Zero console/page errors.
 
+### 25. Milestone 6, phase 1: navigation screen visual iteration
+
+**Files created:** `src/components/Toast.vue`
+**Files changed:** `src/stores/navigation.js`, `src/views/MapScreen.vue`, `src/components/HudOverlay.vue`, `src/components/AbilityButton.vue`
+
+Six of §6's eight implementation steps, picked for being genuinely mechanical (fix a real duplication, give a marker a real distinct shape) rather than open-ended exploration — the two skipped (a dedicated `/dev/map` comparison tool, the route line's directional treatment) didn't need deciding-by-comparison the way the sprite/icon work earlier did, so building a tool to decide would have been overhead without a real decision behind it. Named "phase 1" rather than "done," matching how Direction F got split — the two skipped items are still open, not abandoned.
+
+**Toast consolidation** (`Toast.vue`, new) — replaces three near-identical bespoke `<Transition>` blocks (share/route-error/XP) with one reusable component, rendered twice: a status lane (`routeError` takes priority over `shareStatus`, preserving the priority they already had) and a growth lane for XP, kept at a separate offset on purpose — using the Connector archetype's ability without the Web Share API available grants XP *and* sets `shareStatus` in the same action, a real simultaneous case, not a hypothetical one, so collapsing to a single slot would have actually lost information rather than just tidying duplication.
+
+**Destination marker** — `destMarkerEl()` now draws the "arrive" maneuver icon from `maneuverIcons.js` (Direction F's own turn-by-turn glyph, reused rather than a fourth new asset) onto a canvas, the same technique `poiMarkerEl()` already uses for POI icons. Replaces the old plain-square-recolored-gold marker, which was only distinguishable from the user's own marker by color.
+
+**User marker heading** — `navigation.js` gained a `heading` ref, captured from `coords.heading` in the existing `watchPosition` callback (`null` whenever the device hasn't reported one, which is the common case at rest, not an error). `MapScreen.vue`'s `markerEl()` became a two-element wrapper (outer/inner) so a rotation transform on the inner element doesn't fight MapLibre's own positioning `translate()` on the outer one — the same conflict already noted for POI markers' rotation back in §12. `.crystal-marker` itself changed from a plain square to a CSS `clip-path` arrow, since a rotated square doesn't actually look like it's pointing anywhere.
+
+**`AbilityButton.vue`** gained a numeric cooldown countdown (`remainingSeconds`, derived from the existing `cooldownPct`) alongside the veil — a color sweep alone doesn't communicate "how much longer," which matters more as AGI/level scale a cooldown down to where the veil's rate of change gets harder to judge.
+
+**Verified with Playwright at three viewport sizes** (390×844 phone portrait, 844×390 landscape, 768×1024 tablet) plus the existing desktop-sized checks — the milestone's own verification plan called for real phone-sized screenshots, not just desktop ones, specifically because a screen meant to be glanced at while driving needs judging at the size it's actually used at. **That check paid off immediately**: the route-error toast's original `white-space: nowrap` had no width limit, and at 390px wide the real error message ran clean off both edges of the screen — invisible at every desktop width this session had tested at until now. Fixed with a `max-width`/wrap instead of a fixed nowrap line. Also verified: old toast classes fully gone from the DOM; an XP toast and, separately, a forced route error each render with the correct tone; the ability button's countdown shows a real decrementing number; the destination marker renders as the flag glyph; and — via a page-init script patching `navigator.geolocation.watchPosition` to report a synthetic heading (Playwright's own geolocation mock has no heading field at all) — the user marker's computed CSS transform showed the exact rotation matrix for a 45° heading. Zero unexpected console/page errors (the only two logged were the deliberately-aborted OSRM requests from the error-toast test itself).
+
 ---
 
 ## 1. Persistence & routing guards
@@ -631,9 +648,11 @@ The map and navigation store are the backbone of the app. Every class-specific f
 
 ---
 
-## 6. Navigation screen visual iteration (proposed)
+## 6. Navigation screen visual iteration
 
-Not started. A dedicated design pass on `MapScreen.vue`/`HudOverlay.vue`'s look and feel, distinct from everything built so far there — Milestone 3-5 made the map/HUD functionally correct and verified via Playwright, but nothing has had the kind of iterative visual-review treatment `poiIcons.js` and the alternate sprites got via `/dev/sprites` (§17). This is that treatment, applied to the screen the player spends the most time looking at.
+**Partially implemented — see §25.** Six of the eight implementation steps below shipped (toast consolidation, both markers, the ability cooldown countdown, and the phone-viewport/POI-legibility verification); the design-review tool and the route-line directional treatment were deliberately deferred — §25 explains why. Left as-written below as the spec that was actually built against.
+
+A dedicated design pass on `MapScreen.vue`/`HudOverlay.vue`'s look and feel, distinct from everything built so far there — Milestone 3-5 made the map/HUD functionally correct and verified via Playwright, but nothing has had the kind of iterative visual-review treatment `poiIcons.js` and the alternate sprites got via `/dev/sprites` (§17). This is that treatment, applied to the screen the player spends the most time looking at.
 
 **Scope constraint, stated up front because it's easy to drift past:** this is a presentation pass, not an interaction-model redesign. The driver-attention principle established in the product-direction conversation that opened Milestone 5 — toasts, never modals; a navigation, not an overlay, for anything requiring more than a glance — applies here as a hard constraint, not a preference. Anything proposed below that would add required reading time or new motion competing for attention should be cut, not softened.
 

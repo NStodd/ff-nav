@@ -171,6 +171,13 @@ export const useNavigationStore = defineStore('navigation', () => {
   const destination = ref(savedDest ? JSON.parse(savedDest) : null) // { lat, lng } | null
 
   const position    = ref(null)  // { lat, lng }
+  // Direction/heading of travel in degrees, `null` when the device hasn't
+  // reported one yet (stationary, indoors, no compass) — most browsers only
+  // populate `coords.heading` while actually moving at a meaningful speed,
+  // so `null` is the common case at rest, not an error. MapScreen.vue's user
+  // marker falls back to pointing north when this is `null`, a disclosed
+  // simplification rather than a claim of accuracy with no data behind it.
+  const heading     = ref(null)
   const route       = ref([])    // [ [lng, lat], ... ] — GeoJSON coordinate order
   const eta         = ref(null)  // seconds
   const watcherId   = ref(null)
@@ -253,7 +260,11 @@ export const useNavigationStore = defineStore('navigation', () => {
   function startWatching() {
     if (watcherId.value != null || !navigator.geolocation) return
     watcherId.value = navigator.geolocation.watchPosition(
-      (pos) => { position.value = { lat: pos.coords.latitude, lng: pos.coords.longitude } },
+      (pos) => {
+        position.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const h = pos.coords.heading
+        heading.value = (h == null || Number.isNaN(h)) ? null : h
+      },
       // A denied/unavailable permission previously failed silently — the map
       // just never got a position and nothing on screen said why. This reuses
       // the same routeError toast channel rather than inventing a second
@@ -529,6 +540,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     route.value       = []
     eta.value         = null
     position.value    = null
+    heading.value     = null
     routeDistanceMeters.value = null
     steps.value       = []
     currentStepIndex.value = 0
@@ -544,6 +556,7 @@ export const useNavigationStore = defineStore('navigation', () => {
   function reset() {
     stopWatching()
     position.value    = null
+    heading.value     = null
     destination.value = null
     route.value       = []
     eta.value         = null
@@ -562,7 +575,7 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   return {
-    position, destination, route, eta, pois, revealing, rerouting, fetchingRoute,
+    position, heading, destination, route, eta, pois, revealing, rerouting, fetchingRoute,
     shareStatus, routeError, privacyActive,
     routeDistanceMeters, tripJustCompleted,
     hasRoute, etaFormatted, currentManeuver,

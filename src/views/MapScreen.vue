@@ -5,23 +5,12 @@
     <button class="start-over" @click="startOver">&#8592; START OVER</button>
     <button class="profile-link" @click="router.push({ name: 'profile', params: { genreId: store.chosenGenre.id } })">PROFILE &#9658;</button>
 
-    <Transition name="toast-fade">
-      <div v-if="navigation.shareStatus" class="share-toast" :style="{ '--cc': store.chosenClass.color }">
-        {{ navigation.shareStatus }}
-      </div>
-    </Transition>
-
-    <Transition name="toast-fade">
-      <div v-if="navigation.routeError" class="route-error-toast">
-        {{ navigation.routeError }}
-      </div>
-    </Transition>
-
-    <Transition name="toast-fade">
-      <div v-if="xpToast" class="xp-toast" :style="{ '--cc': store.chosenClass.color }">
-        {{ xpToast }}
-      </div>
-    </Transition>
+    <!-- Milestone 6: one reusable Toast, rendered twice — a status lane
+         (share/route-error feedback, routeError taking priority since the
+         two already shared this slot before this pass) and a growth lane
+         (XP), rather than three near-identical bespoke blocks. -->
+    <Toast :text="statusToastText" :tone="statusToastTone" :color="store.chosenClass.color" top="1rem" />
+    <Toast :text="xpToast" tone="gold" top="3.4rem" />
 
     <HudOverlay @ability="onAbility" :cooldownMs="cooldownMs" />
   </div>
@@ -36,7 +25,9 @@ import { usePlayerStore } from '@/stores/player.js'
 import { useNavigationStore, PRIVACY_BLACKOUT_MS } from '@/stores/navigation.js'
 import { useProfileStore } from '@/stores/profile.js'
 import { iconForCategory } from '@/data/poiIcons.js'
+import { iconForManeuver } from '@/data/maneuverIcons.js'
 import HudOverlay from '@/components/HudOverlay.vue'
+import Toast from '@/components/Toast.vue'
 
 // Free, no-API-key vector basemap. See Navigation.md for attribution requirements
 // and how to swap this for a self-hosted style later.
@@ -64,6 +55,12 @@ const cooldownMs = computed(() => Math.round(
   BASE_ABILITY_COOLDOWN_MS * profile.cooldownMultiplier(store.chosenClass.id, store.chosenClass),
 ))
 
+// Milestone 6: the two messages that share Toast's "status" slot — a route
+// failure is strictly more important than routine share feedback, so it
+// wins the slot outright rather than the two ever needing to queue.
+const statusToastText = computed(() => navigation.routeError ?? navigation.shareStatus)
+const statusToastTone = computed(() => navigation.routeError ? 'error' : 'default')
+
 const mapEl = ref(null)
 let map            = null
 let userMarker     = null
@@ -72,15 +69,50 @@ let userMarkerAdded = false
 let hasCentered     = false
 const poiMarkers = new Map() // poi id -> Marker, so revealPOIs() re-renders never duplicate one
 
+// Two-element wrapper (outer/inner) rather than one div: MapLibre applies its
+// own positioning `translate()` directly to whatever element it's given —
+// the same conflict already noted for POI markers below. Rotating the user
+// marker for heading (see the heading watcher near the bottom of this file)
+// needs its own transform on a child, not fighting MapLibre's on the same
+// element.
 function markerEl(color) {
-  const el = document.createElement('div')
-  el.className = 'crystal-marker'
-  el.style.setProperty('--cc', color)
-  return el
+  const outer = document.createElement('div')
+  const inner = document.createElement('div')
+  inner.className = 'crystal-marker'
+  inner.style.setProperty('--cc', color)
+  outer.appendChild(inner)
+  return outer
 }
 
 const POI_ICON_COLOR_MAP = { '2': '#F5CBA7', w: '#FFFFFF', g: '#888888', G: '#F0C060', d: '#333333' }
 const POI_ICON_PIXEL_SIZE = 3
+const DEST_MARKER_PIXEL_SIZE = 3
+
+// Milestone 6: the destination used to be the exact same square shape as the
+// user marker, just recolored gold — indistinguishable at a glance without
+// reading color, which also just fails outright for color-blind users. Reuses
+// the "arrive" maneuver icon (maneuverIcons.js) — the same pixel-art flag
+// glyph turn-by-turn shows for the final instruction, drawn the same way
+// poiMarkerEl() below draws POI icons, since a destination pin is
+// conceptually the same "you're heading here" idea either way.
+function destMarkerEl(color) {
+  const icon = iconForManeuver('arrive')
+  const canvas = document.createElement('canvas')
+  canvas.className = 'dest-marker-canvas'
+  const cols = Math.max(...icon.rows.map(r => r.length))
+  canvas.width  = cols * DEST_MARKER_PIXEL_SIZE
+  canvas.height = icon.rows.length * DEST_MARKER_PIXEL_SIZE
+  const ctx = canvas.getContext('2d')
+  icon.rows.forEach((row, ri) => {
+    for (let ci = 0; ci < row.length; ci++) {
+      const ch = row[ci]
+      if (ch === '0') continue
+      ctx.fillStyle = ch === '1' ? color : (POI_ICON_COLOR_MAP[ch] ?? '#fff')
+      ctx.fillRect(ci * DEST_MARKER_PIXEL_SIZE, ri * DEST_MARKER_PIXEL_SIZE, DEST_MARKER_PIXEL_SIZE, DEST_MARKER_PIXEL_SIZE)
+    }
+  })
+  return canvas
+}
 
 // Renders the POI's actual category icon (see poiIcons.js) rather than a
 // generic marker shape — a café and a museum now look like a café and a
@@ -241,6 +273,22 @@ watch(() => navigation.position, (pos) => {
   }
 }, { immediate: true })
 
+// Milestone 6: the user marker now points in the direction of travel when
+// the device reports one, instead of always being a shape that looks
+// identical whether stationary or moving at speed. Rotates the *inner*
+// element (see markerEl() above) — MapLibre owns the outer element's own
+// transform for positioning, and setting a second transform on the same
+// element would just overwrite one or the other. `heading` is `null`
+// whenever the browser/OS doesn't have one yet (indoors, stationary, no
+// compass) — the arrow just keeps pointing north (0deg) in that case rather
+// than showing nothing, a known simplification, not a claim of an accurate
+// heading with no data behind it.
+watch(() => navigation.heading, (heading) => {
+  if (!userMarkerAdded) return
+  const inner = userMarker.getElement().firstElementChild
+  if (inner) inner.style.transform = `rotate(${heading ?? 0}deg)`
+})
+
 watch(() => navigation.route, syncRoute)
 watch(() => navigation.pois, syncPOIs, { deep: true })
 
@@ -250,7 +298,7 @@ watch(() => navigation.destination, (dest) => {
     destMarker?.remove()
     return
   }
-  if (!destMarker) destMarker = new Marker({ element: markerEl('#F0C060') })
+  if (!destMarker) destMarker = new Marker({ element: destMarkerEl('#F0C060') })
   destMarker.setLngLat([dest.lng, dest.lat]).addTo(map)
 })
 
@@ -375,82 +423,25 @@ watch(() => navigation.tripJustCompleted, (trip) => {
   color: var(--ff-text);
 }
 
-/* Feedback for the Connector archetype's ability — only ever seen on the
-   clipboard-fallback / unsupported paths of shareETA(); a real OS share sheet
-   is its own confirmation UI. */
-.share-toast {
-  position:       absolute;
-  z-index:        3;
-  top:            1rem;
-  left:           50%;
-  transform:      translateX(-50%);
-  font-family:    'Press Start 2P', monospace;
-  font-size:      9px;
-  padding:        10px 16px;
-  background:     var(--ff-panel);
-  color:          var(--cc);
-  border:         2px solid var(--cc);
-  box-shadow:     0 0 16px color-mix(in srgb, var(--cc) 35%, transparent);
-  white-space:    nowrap;
-}
-
-/* Route/geolocation failure feedback — shares the share-toast's top-center
-   slot (an in-flight share and a route failure are never both relevant at
-   once) but its own red-tinted styling so a driver's glance distinguishes
-   "something failed" from the gold-toned confirmation/growth toasts. */
-.route-error-toast {
-  position:       absolute;
-  z-index:        3;
-  top:            1rem;
-  left:           50%;
-  transform:      translateX(-50%);
-  font-family:    'Press Start 2P', monospace;
-  font-size:      9px;
-  padding:        10px 16px;
-  background:     var(--ff-panel);
-  color:          #E85C5C;
-  border:         2px solid #E85C5C;
-  box-shadow:     0 0 16px rgba(232, 92, 92, 0.35);
-  white-space:    nowrap;
-}
-
-/* Growth feedback (ability XP, trip-completion XP) — offset below the
-   share-toast's position so the two can never visually stack. */
-.xp-toast {
-  position:       absolute;
-  z-index:        3;
-  top:            3.4rem;
-  left:           50%;
-  transform:      translateX(-50%);
-  font-family:    'Press Start 2P', monospace;
-  font-size:      9px;
-  padding:        8px 14px;
-  background:     var(--ff-panel);
-  color:          var(--ff-gold);
-  border:         2px solid var(--ff-gold-dark);
-  box-shadow:     0 0 16px color-mix(in srgb, var(--ff-gold) 30%, transparent);
-  white-space:    nowrap;
-}
-
-.toast-fade-enter-active,
-.toast-fade-leave-active {
-  transition: opacity 0.25s ease;
-}
-
-.toast-fade-enter-from,
-.toast-fade-leave-to {
-  opacity: 0;
-}
 </style>
 
 <style>
 /* Marker element is injected by MapLibre outside this component's scoped tree. */
+
+/* Milestone 6: was a plain square — identical whether stationary or moving,
+   and a rotated square doesn't read as "pointing" anywhere. An arrow shape
+   (clip-path chevron) actually looks directional once the heading watcher
+   (MapScreen.vue's <script>) rotates it; `transition` smooths GPS heading
+   jitter into a glide instead of a snap. This is the *inner* element markerEl()
+   wraps the outer marker div with — MapLibre's own position transform lives
+   on the outer element untouched. */
 .crystal-marker {
-  width:  14px;
-  height: 14px;
+  width:  16px;
+  height: 16px;
   background: var(--cc);
-  border: 2px solid var(--ff-night);
-  box-shadow: 0 0 8px var(--cc), 0 0 2px var(--ff-night);
+  clip-path: polygon(50% 0%, 100% 100%, 50% 76%, 0% 100%);
+  filter: drop-shadow(0 0 5px var(--cc)) drop-shadow(0 0 2px var(--ff-night));
+  transition: transform 0.3s ease;
 }
 
 /* A revealed POI (Adventurer archetype's ability) — the category icon itself
@@ -460,5 +451,14 @@ watch(() => navigation.tripJustCompleted, (trip) => {
 .poi-marker-canvas {
   image-rendering: pixelated;
   filter: drop-shadow(0 0 3px var(--cc)) drop-shadow(0 0 1px var(--ff-night));
+}
+
+/* The destination pin — see destMarkerEl() in <script>. Reuses the same
+   "arrive" maneuver glyph turn-by-turn shows for the final instruction, so a
+   flag/pin silhouette replaces the old plain-square-recolored-gold marker;
+   distinguishable from the user's arrow marker by shape, not only color. */
+.dest-marker-canvas {
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 4px var(--ff-gold)) drop-shadow(0 0 2px var(--ff-night));
 }
 </style>
