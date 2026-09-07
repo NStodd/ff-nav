@@ -587,3 +587,57 @@ The map and navigation store are the backbone of the app. Every class-specific f
 **Dark map tile styling**
 1. If using Leaflet: apply a CSS filter to the tile layer container (`filter: invert(1) hue-rotate(180deg) brightness(0.7) saturate(0.6)`) — cheap approximation of a dark map.
 2. If using MapLibre: use a dark base style (e.g. `maptiler-dark` or a self-hosted style) and override road/label colors to approximate the `--ff-night` / `--ff-text` palette.
+
+---
+
+## 6. Navigation screen visual iteration (proposed)
+
+Not started. A dedicated design pass on `MapScreen.vue`/`HudOverlay.vue`'s look and feel, distinct from everything built so far there — Milestone 3-5 made the map/HUD functionally correct and verified via Playwright, but nothing has had the kind of iterative visual-review treatment `poiIcons.js` and the alternate sprites got via `/dev/sprites` (§17). This is that treatment, applied to the screen the player spends the most time looking at.
+
+**Scope constraint, stated up front because it's easy to drift past:** this is a presentation pass, not an interaction-model redesign. The driver-attention principle established in the product-direction conversation that opened Milestone 5 — toasts, never modals; a navigation, not an overlay, for anything requiring more than a glance — applies here as a hard constraint, not a preference. Anything proposed below that would add required reading time or new motion competing for attention should be cut, not softened.
+
+### Why now
+
+Milestone 4 (all four abilities) and the production-hardening pass are both done — the map/HUD's *behavior* is stable. This is the natural point to step back and refine presentation before Milestone 7 (turn-by-turn, below) adds a new element that has to visually coexist with everything already on screen.
+
+### Implementation steps
+
+- [ ] Build a design-review tool for the map/HUD together (same precedent as `/dev/hud`'s sliders and `/dev/sprites`' comparison rows) — a way to compare route-line/marker/toast treatments side by side before committing, rather than judging changes one Playwright screenshot at a time.
+- [ ] **Route line treatment.** Currently a flat `line-width: 4` in the class color. Consider a directional cue (a subtle gradient or leading pulse showing which end is "ahead") distinct from the existing reroute flash (`pulseRoute()`), which needs to stay visually distinguishable from whatever this becomes.
+- [ ] **User marker.** Currently a static tinted square (`.crystal-marker`). Once device heading is available, consider a directional indicator (small arrow/cone) rather than a shape that looks identical whether stationary or moving at speed.
+- [ ] **Destination marker.** Currently the same square shape as the user marker, only recolored gold — the two are only distinguishable by color, which fails for color-blind users and is a bad glance-test generally. Wants a genuinely distinct silhouette (pin/flag/pixel glyph).
+- [ ] **POI marker legibility at real size.** `poiIcons.js`'s icons were verified via zoomed screenshots (§17) — confirm they still read correctly at actual in-app render size on a phone-sized viewport, not just under zoom.
+- [ ] **Toast stack consolidation.** `.share-toast`, `.route-error-toast`, and `.xp-toast` are three independently-positioned, near-identical `<Transition>` blocks in `MapScreen.vue`, manually offset (`top: 1rem` vs `top: 3.4rem`) to avoid colliding. Three of these is the point where a single managed toast-queue component (one `<Transition-group>`, a small queue of `{ text, tone }` entries) stops being premature and starts being warranted — particularly since Milestone 7 below may want to reuse the same queue rather than becoming a fourth bespoke toast.
+- [ ] **`HudOverlay` at real phone viewports.** Verified so far only at desktop Playwright viewport sizes. Check common phone aspect ratios (tall/narrow portrait, a landscape sanity check) for crowding/wrapping, and safe-area padding (notches, gesture bars) on a real device — ties into Milestone 7 (§7 below) and Direction E (Android re-verification).
+- [ ] **`AbilityButton`'s cooldown readout.** The veil (a solid color sweep) communicates "still cooling down" but not "how much longer" — consider adding a numeric countdown for classes/levels with longer cooldowns, where a bare color sweep is hard to judge at a glance.
+- [ ] Once decisions are made, update `main.css`'s `--hud-*` token defaults and `Navigation.md`'s "Tuning the HUD's look" section to match.
+
+### Verification plan
+
+Playwright screenshots at 2+ phone-sized viewports (a tall handheld portrait plus a landscape sanity check) in addition to the desktop-sized checks used so far, plus a real Android on-device pass — a screen meant to be glanced at while driving needs judging on real glass, not a description of one.
+
+---
+
+## 7. Turn-by-turn screen (proposed)
+
+Not started. The clearest gap between "renders a route" and "is a real navigation tool": nothing today tells the player what to actually do next, only that a route and an ETA exist. OSRM's response already includes full per-step maneuver data (`steps[].maneuver.type`/`modifier`, `.distance`, `.name`) — `analyzeRoute()` (`navigation.js`, §18) already reads it for route scoring — but none of it is surfaced to the player once a route is picked. This closes that gap.
+
+### Design questions to settle before building
+
+Worth deciding deliberately rather than guessing, possibly via a short back-and-forth when this milestone starts:
+
+- **Persistent strip vs. a distinct "in maneuver" screen state?** A HUD strip that's always present once `hasRoute` is true keeps with the existing "one screen, layered overlays" pattern; a separate state risks feeling like a mode switch. Leans toward the former given everything else on this screen is additive, not modal.
+- **How much detail is safe to show at once?** Just the next maneuver + a distance countdown ("in 200m, turn left onto Market St"), or a short look-ahead list of the next 2-3 turns? More detail is more useful stopped at a light, more distracting doing 50 down a highway — the driver-attention principle argues for defaulting minimal (next maneuver only) and treating anything more as an opt-in, not a default.
+- **Room to reserve for audio/voice cues later?** Out of scope to build this pass, but worth deciding whether the layout should reserve space for a mute/audio toggle now rather than retrofitting one later.
+
+### Implementation steps
+
+- [ ] Extend `navigation.js`'s route state to retain per-step maneuver data (currently discarded by `fetchRoute()`/`attemptReroute()` right after `analyzeRoute()` reads it for scoring) — a `steps` ref shaped off OSRM's own `legs[].steps[]`, kept alongside `route`/`eta`.
+- [ ] A `currentManeuver` getter/computed: the step whose end point is the nearest one still ahead of live `position`, recalculated on every position update — this is the actual "in 200m" countdown logic, and needs to reset correctly whenever `attemptReroute()` swaps to a different route (a stale instruction for a route no longer being followed is worse than no instruction).
+- [ ] A small pixel-art maneuver icon set (left/right turn, continue straight, arrive, roundabout, merge — matching OSRM's `maneuver.type`/`modifier` vocabulary), designed and compared the same way `poiIcons.js` was — a design-review pass before committing, not drawn once and shipped.
+- [ ] A new `TurnByTurnBanner.vue` component — positioned deliberately against `HudOverlay` and whatever the toast stack becomes in Milestone 6, not bolted on wherever there's empty space.
+- [ ] Arrival-adjacent copy: the final maneuver should read as "arrive at destination," not silently disappear or freeze on the second-to-last instruction.
+
+### Verification plan
+
+A Playwright test that scripts geolocation along a real fetched route's own coordinates step by step (not just a single start/end pair), confirming the banner's instruction and distance update correctly as simulated position advances past each maneuver, and that it updates (not just persists) correctly across a reroute.
