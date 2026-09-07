@@ -28,6 +28,13 @@
         @next="nextStep"
       />
 
+      <PartyStep
+        v-else-if="currentStepId === 'party'"
+        :key="'party'"
+        :classData="classData"
+        @next="nextStep"
+      />
+
       <LocationPermissionStep
         v-else-if="currentStepId === 'location'"
         :key="'location'"
@@ -52,6 +59,7 @@ import OnboardingLayout       from '@/components/OnboardingLayout.vue'
 import WelcomeStep            from '@/components/WelcomeStep.vue'
 import PersonalizeStep        from '@/components/PersonalizeStep.vue'
 import AbilityRevealStep      from '@/components/AbilityRevealStep.vue'
+import PartyStep              from '@/components/PartyStep.vue'
 import LocationPermissionStep from '@/components/LocationPermissionStep.vue'
 import DoneStep                from '@/components/DoneStep.vue'
 

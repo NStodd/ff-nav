@@ -4,9 +4,9 @@ Open problems worth planning around, logged with enough detail to pick back up l
 
 ---
 
-## Android: app becomes unresponsive / blank-white after the location-permission step
+## Android: app crashed after the location-permission step (RESOLVED)
 
-**Status:** Unresolved, root cause unconfirmed. First encountered 2026-07-25 while getting the app running on Android for the first time.
+**Status:** Resolved 2026-09-05. First encountered 2026-07-25 while getting the app running on Android for the first time; root cause found and fixed in a follow-up session.
 
 ### Environment
 
@@ -14,39 +14,43 @@ Open problems worth planning around, logged with enough detail to pick back up l
 - Emulator: `Pixel5_API35` (Android 15 / API 35, `google_apis` x86_64 image, system WebView Chromium 124)
 - Host: Windows, dev server via `npm run tauri android dev` / `npx tauri android dev`
 
-### What works, confirmed on-device
+### Root cause
 
-Genre-select screen, class-select screen (card selection + confirm), and the first three onboarding steps (intro narration, ability reveal, location-permission prompt) all render correctly and respond to touch (`adb shell input tap`) using real app content — screenshotted and verified at each step. Two real environment bugs were found and fixed to get this far (see "Fixes already applied" below).
+`src-tauri/gen/android/app/src/main/AndroidManifest.xml` never declared `android.permission.ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` — only `INTERNET` was present (the stock `tauri android init` template; nothing in this codebase added them, since onboarding calls the raw `navigator.geolocation` Web API rather than a Tauri geolocation plugin that would inject its own manifest permissions).
 
-### What's broken
+Without those declarations, tapping "GRANT ACCESS"/"ENABLE LOCATION" set off a tight failure loop, confirmed via `adb logcat -v threadtime` across the crash window:
 
-Pushing through the location-permission step to reach the map screen was not completed. Two things happened, and it's unclear whether they're the same root cause or two separate issues:
+1. `LocationPermissionStep.vue` calls `navigator.geolocation.getCurrentPosition()`.
+2. Tauri's generated `RustWebChromeClient.onGeolocationPermissionsShowPrompt()` (`src-tauri/gen/android/app/src/main/java/.../generated/RustWebChromeClient.kt:266`) tries to request the two location permissions via an `ActivityResultLauncher`.
+3. Android's `GrantPermissionsActivity` logs `GrantPermissionsViewModel: None of [android.permission.ACCESS_COARSE_LOCATION, android.permission.ACCESS_FINE_LOCATION] in {}` — it has nothing to grant, because the app never declared either permission — and relaunches itself five to six times in well under a second.
+4. One of those relaunches calls `permissionLauncher.launch()` on a launcher the Activity Result API no longer considers registered, throwing an **uncaught `java.lang.IllegalStateException: Attempting to launch an unregistered ActivityResultLauncher ... You must ensure the ActivityResultLauncher is registered before calling launch().`**
+5. The uncaught exception kills the process: `ActivityManager: Process com.natrix.ff_navigation has died: fg TOP`.
 
-1. **An unexpected full-page reload reset in-progress onboarding state.** `store.onboardingStep` isn't persisted to `localStorage` (only `chosenGenre`/`chosenClass` are — see `src/stores/player.js`), so any full reload mid-onboarding drops the user back to the `intro` step, or in one observed case all the way back to the genre-select screen. Suspected cause: Vite's HMR websocket (port **1421**) wasn't forwarded via `adb reverse` (only port 1420, the main dev server port, was) — the client's repeated failed reconnect attempts may trigger Vite's fallback full-reload behavior. **Partially addressed**: `adb reverse tcp:1421 tcp:1421` was added mid-session, but the fix was not re-verified before the session ended.
+This is the same "process has died: fg TOP" symptom logged in the original 2026-07-25 session, now with a full stack trace pinning the actual cause. The original session's Background-Activity-Launch theory (that `adb shell input tap`'s synthetic events lack "recent user interaction" provenance) did **not** reproduce this time and was a red herring — `GrantPermissionsActivity` launched successfully every time; the crash was the missing-permission exception above, not a blocked launch.
 
-2. **The app process died outright** shortly after tapping "GRANT ACCESS" on the location-permission step. `adb logcat` showed:
-   ```
-   ActivityTaskManager: Background activity launch blocked! [...
-     intent: Intent { act=android.content.pm.action.REQUEST_PERMISSIONS pkg=com.google.android.permissioncontroller
-     cmp=com.google.android.permissioncontroller/...GrantPermissionsActivity ... }
-     callingPackage: com.natrix.ff_navigation ...]
-   ActivityManager: Process com.natrix.ff_navigation (pid 4621) has died: fg TOP
-   ```
-   No Java/Kotlin exception trace (`AndroidRuntime: FATAL EXCEPTION`) accompanied the death, and no native crash/tombstone signature was captured either — the process just stopped.
+### Fix
 
-   **Working theory, unconfirmed:** location permission had already been pre-granted out-of-band via `adb shell pm grant ... ACCESS_FINE_LOCATION`. When the in-page JS then called `navigator.geolocation.getCurrentPosition()` (`LocationPermissionStep.vue`), the WebView/wry layer may still have attempted to launch Android's native permission-request activity despite the permission already being granted, and Android's Background Activity Launch (BAL) protection blocked that launch — synthetic `adb shell input tap` events likely don't carry the same "recent user interaction" provenance a real touchscreen tap does, which BAL checks rely on. If that's right, this may be **specific to testing via `adb shell input tap`** rather than a bug real users would hit — but this has not been verified with genuine touchscreen/emulator-window input.
+Added the two missing declarations to `AndroidManifest.xml`:
 
-3. **On relaunching the app after the crash, the WebView showed blank white again** — the same symptom as the original Chromium-91 syntax-error bug (see below), but this time on the already-fixed Chromium 124 WebView, so it's very unlikely to be the same cause. Not yet diagnosed: could be a cold-start timing issue (screenshot taken before the WebView finished loading), a residual effect of the HMR reload, or something new. The session was interrupted before this could be narrowed down.
+```xml
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+```
 
-### Fixes already applied this session (for context, not part of the open issue)
+### Verified on-device, post-fix
 
-- **Network**: Tauri defaults to binding the dev server to the host's LAN IP on Windows, which the emulator's virtual NAT can't reach. Fixed with `tauri android dev --host 127.0.0.1` + `adb reverse tcp:1420 tcp:1420`.
+Full flow re-run from a clean install, Final Fantasy → White Mage, through every onboarding step to the map:
+
+- Tapping "ENABLE LOCATION" now shows the real native Android permission dialog ("Allow ff_navigation to access this device's location?", Precise/Approximate, While using the app/Only this time/Don't allow) — no crash, no reload, same process (`pid` unchanged) throughout.
+- Granting it resolves `getCurrentPosition()` ("Location acquired. Ready to navigate.") and proceeds through the fanfare (`DoneStep`) into the map screen without incident.
+- This also gave us the first real on-device confirmation of **Milestone 3**: MapLibre GL renders actual CARTO Dark Matter vector tiles (buildings, roads, labels) via WebGL on the emulator's GPU, the class-colored user marker appears at the resolved position, and tapping the map to set a destination draws a real OSRM-routed polyline in the class color with a gold destination marker and a live ETA in the HUD (`2 min` in the test run). None of this had previously been verified outside desktop Chromium/Playwright — see `Navigation.md`.
+
+### Fixes applied in the original 2026-07-25 session (for context, unaffected by the above)
+
+- **Network**: Tauri defaults to binding the dev server to the host's LAN IP on Windows, which the emulator's virtual NAT can't reach. Fixed with `tauri android dev --host 127.0.0.1` + `adb reverse tcp:1420 tcp:1420` (and, from this session on, `adb reverse tcp:1421 tcp:1421` for the HMR socket too, forwarded from the start — no reload was observed this session, so the port-1421 theory for the earlier reload symptom is plausible but not conclusively confirmed either way).
 - **WebView too old**: the original `Pixel_5_API_31` AVD (Android 12, `google_apis` image) shipped Chromium 91, which cannot parse MapLibre GL's bundled JS (`Uncaught SyntaxError: Unexpected token '{'` in `maplibre-gl.mjs`), crashing the module graph before Vue mounted. Fixed by creating a new AVD on a newer system image (`system-images;android-35;google_apis;x86_64`, Chromium 124).
 
-### Next steps to try
+### Remaining follow-up (not blocking, general resilience)
 
-- [ ] Re-run the location-permission → map flow with `adb reverse tcp:1421` already in place from the start, to see if the mid-flow reload is actually gone.
-- [ ] Reproduce using genuine input in the emulator's GUI window (mouse clicks on the emulator UI) instead of `adb shell input tap`, to test the BAL/synthetic-input theory directly.
-- [ ] If the crash reproduces with real input too, capture a full `adb logcat` (unfiltered) across the crash window and look for a native tombstone (`DEBUG: *** *** ***`) or Rust panic output, since no Java exception was found.
-- [ ] Once past the location step reliably, confirm MapLibre GL actually renders (WebGL context creation, tile load, marker/route rendering) on-device — this is the one piece of the map foundation (`Navigation.md`) never actually verified on Android/mobile GPU drivers, only in desktop Chromium via Playwright.
-- [ ] Consider persisting `onboardingStep` to `localStorage` alongside `chosenGenre`/`chosenClass` regardless of the reload's root cause — losing onboarding progress on any unexpected reload (not just this one) is a rough edge worth closing generally.
+- [ ] Persist `onboardingStep` to `localStorage` alongside `chosenGenre`/`chosenClass` — still worth doing generally so any unexpected reload (HMR hiccup, OS-level low-memory kill, etc.) doesn't drop a user back to `intro` mid-flow, independent of the crash above now being fixed.
+- [ ] The destination-before-position race and the OSRM public-demo-server caveat noted in `Navigation.md` are unrelated and still open.

@@ -92,23 +92,27 @@ Every genre's four classes map onto the same four narrative archetypes, which is
 
 All four archetypes share the same ability *shape* across genres too, just reflavored: Adventurer reveals hidden POIs, Speedrunner silently reroutes, Connector shares ETA, Sovereign does something aggressive/privacy-related (cosmetic fireball, trail wipe, trail wipe, trail wipe — FF is the odd one out here, since FIRE was designed before the "privacy ability" pattern solidified with Overseer/Outlaw/Captain).
 
-### Sprite reuse
+### Sprite reuse — and sprite variation
 
-Four pixel-grid silhouettes get reused across all four genres' rosters, reinterpreted by color and occasionally by character mapping:
+Four pixel-grid silhouettes started out reused verbatim across all four genres' rosters, reinterpreted only by color. That's still the *default* — a class's `sprite` field is independent per-class data, so nothing technically requires reuse, but starting from the shared shape is far less work than drawing four new ones, and the archetype table above already does the heavy lifting of keeping tone consistent. FF (the original genre) is kept as the unmodified reference for all four archetypes; each of the other three genres has since departed from a couple of them where a small, targeted change fits that class's actual ability better than the shared default:
 
-- **Adventurer shape** (Fighter's) — visible face by default; Pilot's version swaps the skin-tone `'2'` cells for `'w'` (a helmet visor, since a spacesuit doesn't show skin).
-- **Speedrunner shape** (Thief's) — hooded/low-profile, fits a scarf-wearing smuggler, a duster-coated outrider, or a bandana'd corsair equally well.
-- **Connector shape** (White Mage's) — long robe/coat, works unchanged for a diplomat's uniform, a wagon master's coat, or a quartermaster's coat.
-- **Sovereign shape** (Black Mage's) — hooded/masked, fits an AI overseer, a masked outlaw, or a tricorn-hatted captain.
+| Archetype | Base shape | FF | Star Voyager | Wild Frontier | High Seas |
+|---|---|---|---|---|---|
+| Adventurer | Fighter's, visible face | unchanged | Pilot: skin `'2'` → `'w'` (helmet visor) | Gunslinger: gold bandolier stripe | Buccaneer: hood/hat-brim shadow |
+| Speedrunner | Thief's, hooded | unchanged | Smuggler: full flight mask, no visible face | Outrider: staggered legs (mid-stride) | unchanged |
+| Connector | White Mage's, robed | unchanged | Diplomat: raised antenna (UPLINK, literal) | Wagon Master: held lantern (SIGNAL FIRE, literal) | Quartermaster: raised flagpole (SIGNAL FLAG, literal) |
+| Sovereign | Black Mage's, hooded/masked | unchanged | Overseer: faceless, no eye-slits (an AI doesn't need to see to watch you) | Outlaw: peaked hood (a bandit's low-pulled hat) | Captain: faceless, no eye-slits |
 
-See `PixelSprite.vue` for the character-to-color mapping (`'1'` = class color, `'2'` = skin, `'w'`/`'g'`/`'G'`/`'d'` = fixed white/gray/gold/dark, `'0'` = transparent).
+Every variant is a **small, targeted mutation of the proven base shape** — same row-length pattern, same `PixelSprite.vue` character vocabulary, only specific rows changed — rather than a from-scratch silhouette. That's a deliberate risk-reduction choice: a wholly new pose is much likelier to render as a garbled mess than a couple of changed rows on top of a shape that's already shipping correctly. See `PixelSprite.vue` for the character-to-color mapping (`'1'` = class color, `'2'` = skin, `'w'`/`'g'`/`'G'`/`'d'` = fixed white/gray/gold/dark, `'0'` = transparent) and note that rows within one sprite don't all need the same length — mixed lengths were already present in the original Fighter sprite (rows 0-5 are 8 chars, rows 6-11 are 9) and several variants above lean on this too (a longer row trailing off to one side draws a thin accessory — a staff, an antenna, a flagpole — beside the body without needing a second layer).
+
+**`/dev/sprites`** (`src/views/SpritePlayground.vue`) is the design-review tool this table came out of: it renders every candidate archetype pose across all four genres' real class colors side by side, plus the POI category icons (see `Navigation.md`'s known gaps) in both a neutral tint and every genre's brand color. Candidate poses not adopted into the table above still live in `src/data/spriteAlternates.js` for reference.
 
 ---
 
 ## How to add a fifth genre
 
 1. **Pick the four classes.** Reuse the archetype table above (recommended — keeps tonal variety consistent) or diverge if the genre calls for it.
-2. **Create `src/data/<name>Classes.js`** exporting an array in the exact shape documented above. Reuse one of the four existing sprite silhouettes per class unless the genre specifically needs a new one.
+2. **Create `src/data/<name>Classes.js`** exporting an array in the exact shape documented above. Start from the relevant archetype's base sprite (see "Sprite reuse — and sprite variation" above) and either reuse it verbatim or mutate specific rows if the class's ability suggests something more literal — check any new pose in `/dev/sprites` against all four genres' colors before adopting it.
 3. **Pick colors carefully — check them against the dark background before calling it done, not after.** `--ff-night` is `#0A0A14`, near-black. A color needs real lightness (~35-45%) and saturation to read as a color rather than flat gray against it — this bit us once already (see `PLANNING.md` §9: Wild Frontier's Outlaw shipped with a color that rendered gray, caught only by screenshotting and fixed after the fact). For genre #4 (`PLANNING.md` §10) all four colors were screenshot-checked *before* declaring it done and needed no fix-up — do that, not the §9 way.
 4. **Add the entry to `GENRES`** in `src/data/genres.js`, importing the new roster file. Set `status: 'coming-soon'` with `entryRoute: null` and `classes: []` if you want a placeholder card first, or go straight to `'available'` with `entryRoute: 'class-select'` if the roster's ready.
 5. **Verify the full loop**: genre-select shows the new card → clicking it routes to `/<id>` and renders all four classes correctly → confirm → onboarding (all four steps, in the class's voice) → `/<id>/map` with the HUD showing the right sprite/color/ability. No component code should need to change for any of this.

@@ -7,10 +7,17 @@ export const WESTERN_CLASSES = [
     description: 'Rides the open trail. Every unnamed stretch is a reason to keep moving.',
     ability: 'TRAILBLAZE',
     abilityDesc: 'Reveals hidden waypoints within a stretch of trail around you.',
+    abilityType: 'reveal',
+    abilityRadius: 600,
     stats: { str: 5, exp: 3, agi: 2 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'ability', 'party', 'location', 'done'],
     intro: 'Another stretch of open trail, and not a soul\'s crossed it. I don\'t ride the roads everyone else rides — I find the ones nobody\'s named yet.',
     locationPrompt: 'TRAILBLAZE needs your bearings, drifter.',
+    partyPrompt: 'A drifter rides better with company. Who\'s riding with you?',
+    // A gold bandolier stripe down the chest in place of the Adventurer
+    // archetype's plain trim — reads as ammunition/gear-across-the-body,
+    // fitting a gunslinger better than the shared default. See Genres.md's
+    // "Sprite variation" section.
     sprite: [
       '00022200',
       '00222220',
@@ -18,8 +25,8 @@ export const WESTERN_CLASSES = [
       '00212120',
       '00222220',
       '0G11111G',
-      '011111110',
-      '011111110',
+      '0G1111110',
+      '0G1111110',
       '001g1g100',
       '001111100',
       '011111110',
@@ -34,10 +41,15 @@ export const WESTERN_CLASSES = [
     description: 'Miles don\'t ride themselves. The fastest trail is the only trail worth taking.',
     ability: 'BACKTRAIL',
     abilityDesc: 'Silently switches to a faster route mid-journey.',
+    abilityType: 'reroute',
     stats: { str: 2, exp: 4, agi: 5 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'ability', 'party', 'location', 'done'],
     intro: 'Miles don\'t ride themselves. Fastest trail, quietest hooves, every time.',
     locationPrompt: 'Bearings set. Trail cut. Ride.',
+    partyPrompt: 'Ride\'s faster with someone to answer to. Who?',
+    // Staggered legs at the very bottom — a mid-stride lean instead of the
+    // Speedrunner archetype's usual even stance — fitting "Rider" more than
+    // the shared default. See Genres.md's "Sprite variation" section.
     sprite: [
       '000d1d000',
       '00d111d00',
@@ -50,7 +62,7 @@ export const WESTERN_CLASSES = [
       '001111100',
       '011111110',
       '011d1d110',
-      '011d0d110',
+      '0011d1d10',
     ],
   },
   {
@@ -61,10 +73,15 @@ export const WESTERN_CLASSES = [
     description: 'No one crosses this country alone. Every trail is easier with company.',
     ability: 'SIGNAL FIRE',
     abilityDesc: 'One-tap ETA share with any party member.',
+    abilityType: 'share-eta',
     stats: { str: 1, exp: 5, agi: 3 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'ability', 'party', 'location', 'done'],
     intro: 'No one crosses this country alone — not on my watch. Wherever you\'re bound, I\'ll keep the fire visible for you, and for whoever\'s riding with you.',
     locationPrompt: 'Light the signal — let your party find your fire.',
+    partyPrompt: 'Tell me who\'s counting on you to arrive. I\'ll keep watch for them too.',
+    // A small lantern held out to the side — this is SIGNAL FIRE made
+    // literal, not just the Connector archetype's shared default. See
+    // Genres.md's "Sprite variation" section.
     sprite: [
       '001www100',
       '01wwwww10',
@@ -73,8 +90,8 @@ export const WESTERN_CLASSES = [
       '001www100',
       '011111110',
       '011111110',
-      '001111100',
-      '001111100',
+      '001111100GG',
+      '001111100GG',
       '011111110',
       '01100110',
       '01100110',
@@ -88,11 +105,17 @@ export const WESTERN_CLASSES = [
     description: 'Leaves no trail. Answers to no ledger. That\'s the whole point.',
     ability: 'VANISH',
     abilityDesc: 'Erases your trail. No questions, no exceptions.',
+    abilityType: 'privacy',
     stats: { str: 5, exp: 2, agi: 3 },
-    onboardingSteps: ['intro', 'ability', 'location', 'done'],
+    onboardingSteps: ['intro', 'ability', 'party', 'location', 'done'],
     intro: 'I don\'t leave a trail. Never have. You want to find me, you\'re already too late.',
     locationPrompt: 'Position required. It won\'t stay on the record long.',
+    partyPrompt: 'Name whoever\'s allowed to know where you are. If anyone.',
+    // A peaked hood silhouette in place of the Sovereign archetype's usual
+    // rounded one — reads closer to a bandit's low-pulled hat than the
+    // shared default. See Genres.md's "Sprite variation" section.
     sprite: [
+      '000111000',
       '001111100',
       '011111110',
       '11ddddd11',

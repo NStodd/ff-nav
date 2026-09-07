@@ -45,3 +45,17 @@ export const GENRES = [
     classes: PIRATE_CLASSES,
   },
 ]
+
+// Class ids are unique across every genre's roster (checked — no collisions
+// today), which is exactly why profile.js can key progress by classId alone
+// without genre-scoping. This is the lookup that assumption enables: given
+// just an id, find the class (and its genre) anywhere in GENRES — used by
+// ProfileScreen.vue to show progress on classes from genres other than the
+// one currently active.
+export function findClassById(classId) {
+  for (const genre of GENRES) {
+    const cls = genre.classes.find(c => c.id === classId)
+    if (cls) return { genre, class: cls }
+  }
+  return null
+}
