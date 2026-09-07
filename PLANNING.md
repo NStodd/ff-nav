@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§25) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§26) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -430,6 +430,19 @@ Six of §6's eight implementation steps, picked for being genuinely mechanical (
 
 **Verified with Playwright at three viewport sizes** (390×844 phone portrait, 844×390 landscape, 768×1024 tablet) plus the existing desktop-sized checks — the milestone's own verification plan called for real phone-sized screenshots, not just desktop ones, specifically because a screen meant to be glanced at while driving needs judging at the size it's actually used at. **That check paid off immediately**: the route-error toast's original `white-space: nowrap` had no width limit, and at 390px wide the real error message ran clean off both edges of the screen — invisible at every desktop width this session had tested at until now. Fixed with a `max-width`/wrap instead of a fixed nowrap line. Also verified: old toast classes fully gone from the DOM; an XP toast and, separately, a forced route error each render with the correct tone; the ability button's countdown shows a real decrementing number; the destination marker renders as the flag glyph; and — via a page-init script patching `navigator.geolocation.watchPosition` to report a synthetic heading (Playwright's own geolocation mock has no heading field at all) — the user marker's computed CSS transform showed the exact rotation matrix for a 45° heading. Zero unexpected console/page errors (the only two logged were the deliberately-aborted OSRM requests from the error-toast test itself).
 
+### 26. Milestone 6, phase 2: the map design-review tool, and the route-line treatment it decided
+
+**Files created:** `src/views/MapPlayground.vue`
+**Files changed:** `src/views/MapScreen.vue`, `src/router/index.js`
+
+Closes out §6's two remaining steps, picked back up together since the second only made sense once the first existed: a route-line directional treatment is exactly the kind of decision that benefits from comparing real rendered options side by side, the same reasoning that justified `/dev/hud` and `/dev/sprites` for their own decisions, so the tool got built this time instead of skipped again.
+
+**`/dev/map` (`MapPlayground.vue`)** — a real MapLibre map fetching a real route from the same public OSRM demo server the app itself uses (a fixed Center City Philadelphia origin/destination), with controls to switch between three candidate route-line treatments, fire the existing reroute-pulse animation for a side-by-side comparison, drag a heading slider against a duplicated user-marker element, and fire sample toasts over the map. Switching treatments rebuilds the source/layer from scratch (`line-gradient` needs `lineMetrics: true` set at source-creation time, and doesn't reliably toggle via `setPaintProperty` alone) — a cost that only matters for a comparison tool flipping between options repeatedly, not for the real map setting its paint once.
+
+**The decision**, made by actually looking at three screenshots against the same real fetched route rather than by description: a flat single-color baseline (no directional cue at all), a static `line-gradient` fading from muted-near-origin to full-class-color-at-destination, and the same gradient plus a width taper (thin at the origin, thick at the destination). The plain gradient won — the width-taper variant tested "more noticeable" as predicted in §6's own spec, but that noticeability came at a real cost: the origin end got thin enough to be hard to see, which is a legibility regression, not just a stylistic tradeoff, for no benefit over the gradient alone (the color fade already conveys direction by itself). Applied to the real `MapScreen.vue`: the route source gained `lineMetrics: true`, and the flat `line-color` paint property became a `line-gradient` expression over `['line-progress']`. `pulseRoute()` (the Speedrunner archetype's reroute flash) needed no changes — it only ever touched `line-width`, which stays independent of the gradient.
+
+**Verified with Playwright**: `/dev/map` renders a real fetched route with zero console errors across all three treatments, the pulse animation fires visibly distinct from the static gradient, the heading slider rotates the demo marker, and sample toasts render correctly layered over the map. Then, separately, confirmed the real `/ff/map` screen renders the exact same gradient effect end-to-end against a real destination tap — muted near the player, vivid at the destination — with zero console errors.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -650,7 +663,7 @@ The map and navigation store are the backbone of the app. Every class-specific f
 
 ## 6. Navigation screen visual iteration
 
-**Partially implemented — see §25.** Six of the eight implementation steps below shipped (toast consolidation, both markers, the ability cooldown countdown, and the phone-viewport/POI-legibility verification); the design-review tool and the route-line directional treatment were deliberately deferred — §25 explains why. Left as-written below as the spec that was actually built against.
+**Implemented — see §25 (phase 1: toasts, markers, ability countdown, viewport verification) and §26 (phase 2: the `/dev/map` design-review tool and the route-line gradient it led to).** Left as-written below as the spec that was actually built against, not edited after the fact to match the implementation exactly.
 
 A dedicated design pass on `MapScreen.vue`/`HudOverlay.vue`'s look and feel, distinct from everything built so far there — Milestone 3-5 made the map/HUD functionally correct and verified via Playwright, but nothing has had the kind of iterative visual-review treatment `poiIcons.js` and the alternate sprites got via `/dev/sprites` (§17). This is that treatment, applied to the screen the player spends the most time looking at.
 

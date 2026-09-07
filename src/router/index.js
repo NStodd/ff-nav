@@ -8,6 +8,7 @@ import MapScreen         from '@/views/MapScreen.vue'
 import ProfileScreen     from '@/views/ProfileScreen.vue'
 import HudPlayground     from '@/views/HudPlayground.vue'
 import SpritePlayground  from '@/views/SpritePlayground.vue'
+import MapPlayground     from '@/views/MapPlayground.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -19,12 +20,13 @@ const router = createRouter({
     { path: '/:genreId/profile',     name: 'profile',           component: ProfileScreen     },
     { path: '/dev/hud',              name: 'hud-playground',    component: HudPlayground     },
     { path: '/dev/sprites',          name: 'sprite-playground', component: SpritePlayground  },
+    { path: '/dev/map',              name: 'map-playground',    component: MapPlayground     },
   ],
 })
 
 router.beforeEach((to) => {
   // Standalone dev tools — no genre/class context required.
-  if (to.name === 'hud-playground' || to.name === 'sprite-playground') return true
+  if (to.name === 'hud-playground' || to.name === 'sprite-playground' || to.name === 'map-playground') return true
 
   if (to.name === 'genre-select') return true
 

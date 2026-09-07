@@ -43,7 +43,7 @@ src/
   views/
     GenreSelectScreen.vue  ClassSelectScreen.vue   OnboardingScreen.vue   # the setup flow
     MapScreen.vue          ProfileScreen.vue                              # the app proper
-    HudPlayground.vue      SpritePlayground.vue                           # /dev/* design-review tools, not user-facing
+    HudPlayground.vue      SpritePlayground.vue      MapPlayground.vue    # /dev/* design-review tools, not user-facing
   router/index.js         # /, /:genreId, /:genreId/onboarding, /:genreId/map, /:genreId/profile
 ```
 
@@ -76,7 +76,7 @@ npm run dev          # Vite dev server
 npm run tauri dev    # full Tauri desktop app (needs the Rust toolchain)
 ```
 
-Two dev-only routes exist outside the normal genre/class flow: **`/dev/hud`** (live HUD styling tool with copy-to-clipboard CSS) and **`/dev/sprites`** (POI icon and character-sprite design review).
+Three dev-only routes exist outside the normal genre/class flow: **`/dev/hud`** (live HUD styling tool with copy-to-clipboard CSS), **`/dev/sprites`** (POI icon and character-sprite design review), and **`/dev/map`** (map-layer design review — route-line treatments, markers, and toasts against a real fetched route).
 
 ### Backends
 

@@ -204,18 +204,34 @@ onMounted(() => {
   map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
 
   map.on('load', () => {
+    // `lineMetrics: true` is required for `line-gradient` below (it needs
+    // per-vertex distance-along-the-line data) — decided via /dev/map's
+    // side-by-side comparison against a flat line and a width-taper variant;
+    // the plain gradient won for being an equally clear directional cue
+    // without either option's downsides (no added motion, and no thin,
+    // hard-to-see segment at the origin end the way the taper had).
     map.addSource(ROUTE_SOURCE_ID, {
       type: 'geojson',
+      lineMetrics: true,
       data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } },
     })
     map.addLayer({
       id: ROUTE_LAYER_ID,
       type: 'line',
       source: ROUTE_SOURCE_ID,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color':   store.chosenClass.color,
-        'line-width':   4,
-        'line-opacity': 0.85,
+        'line-width':    4,
+        'line-opacity':  0.9,
+        // Muted near the origin (already traveled), full class color at the
+        // destination end (ahead) — a static fade, not an animation, so it
+        // adds a directional cue without adding motion to compete for a
+        // driver's attention.
+        'line-gradient': [
+          'interpolate', ['linear'], ['line-progress'],
+          0, 'rgba(255, 255, 255, 0.2)',
+          1, store.chosenClass.color,
+        ],
       },
     })
     syncRoute()
