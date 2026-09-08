@@ -5,6 +5,22 @@
       <p class="hint">Milestone 6's design-review tool for the map layer — compare route-line/marker/toast treatments against a real fetched route before committing, instead of judging changes one Playwright screenshot at a time.</p>
 
       <section>
+        <h2>World skin (§9)</h2>
+        <div class="treatment-picker">
+          <button
+            v-for="opt in SKIN_OPTIONS"
+            :key="opt.id"
+            class="treatment-btn skin-btn"
+            :class="{ active: worldSkinId === opt.id }"
+            :disabled="opt.id !== 'default' && !worldSkinFor(opt.id)"
+            :style="{ '--cc': opt.color }"
+            @click="worldSkinId = opt.id"
+          >{{ opt.name }}<span v-if="opt.id !== 'default' && !worldSkinFor(opt.id)" class="skin-tbd"> (not yet designed)</span></button>
+        </div>
+        <p class="hint sub">Repaints the same real Dark Matter tiles in place — same street data, same POI positions, same routing, only the color each layer draws in changes. FF is the pilot; the other three stay disabled here until FF's palette is judged against real screenshots.</p>
+      </section>
+
+      <section>
         <h2>Route line treatment</h2>
         <div class="treatment-picker">
           <button
@@ -57,6 +73,9 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { Map as MapLibreMap, Marker, LngLatBounds } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { iconForManeuver } from '@/data/maneuverIcons.js'
+import { GENRES } from '@/data/genres.js'
+import { MAP_LAYER_GROUPS } from '@/data/mapLayerGroups.js'
+import { worldSkinFor, applyWorldSkin } from '@/data/worldSkins.js'
 import PixelButton from '@/components/PixelButton.vue'
 import Toast from '@/components/Toast.vue'
 
@@ -88,6 +107,15 @@ const TREATMENTS = {
 
 const treatment = ref('flat')
 const heading    = ref(0)
+
+// §9 world-skinning: 'default' is the shipped, unskinned Dark Matter look;
+// every genre appears as an option so the disabled/"(not yet designed)"
+// state is visible in the picker itself, not just absent from it.
+const SKIN_OPTIONS = [
+  { id: 'default', name: 'Default (shipped)', color: '#9090A8' },
+  ...GENRES.map(g => ({ id: g.id, name: g.name, color: g.color })),
+]
+const worldSkinId = ref('default')
 
 const mapEl = ref(null)
 let map = null
@@ -203,6 +231,22 @@ watch(heading, (h) => {
   if (inner) inner.style.transform = `rotate(${h}deg)`
 })
 
+// Runs on initial style load and again after every skin switch. A full
+// `setStyle()` (below) wipes any source/layer this tool added, so the
+// route line needs rebuilding every time — but not the markers: they're
+// positioned by the Map instance directly, not the style, so they survive
+// a style swap untouched and don't need re-adding here.
+function reapplyMapContent() {
+  applyWorldSkin(map, MAP_LAYER_GROUPS, worldSkinId.value === 'default' ? null : worldSkinFor(worldSkinId.value))
+  rebuildRouteLayer()
+}
+
+watch(worldSkinId, () => {
+  if (!map) return
+  map.setStyle(MAP_STYLE)
+  map.once('style.load', reapplyMapContent)
+})
+
 onMounted(async () => {
   map = new MapLibreMap({
     container: mapEl.value,
@@ -226,7 +270,7 @@ onMounted(async () => {
     } catch {
       routeCoords = [[ORIGIN.lng, ORIGIN.lat], [DEST.lng, DEST.lat]] // fallback straight line if the demo server is unreachable
     }
-    rebuildRouteLayer()
+    reapplyMapContent()
 
     if (routeCoords.length) {
       const bounds = routeCoords.reduce((b, c) => b.extend(c), new LngLatBounds(routeCoords[0], routeCoords[0]))
@@ -349,6 +393,21 @@ input[type='range'] {
   border-color: var(--ff-gold-dark);
   color: var(--ff-text);
   background: color-mix(in srgb, var(--ff-gold) 12%, var(--ff-panel));
+}
+
+.skin-btn.active {
+  border-color: var(--cc);
+  color: var(--ff-text);
+  background: color-mix(in srgb, var(--cc) 12%, var(--ff-panel));
+}
+
+.skin-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.skin-tbd {
+  color: var(--ff-muted);
 }
 
 .toast-buttons {

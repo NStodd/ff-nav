@@ -78,7 +78,7 @@ npm run dev          # Vite dev server
 npm run tauri dev    # full Tauri desktop app (needs the Rust toolchain)
 ```
 
-Three dev-only routes exist outside the normal genre/class flow: **`/dev/hud`** (live HUD styling tool with copy-to-clipboard CSS), **`/dev/sprites`** (POI icon and character-sprite design review), and **`/dev/map`** (map-layer design review — route-line treatments, markers, and toasts against a real fetched route).
+Three dev-only routes exist outside the normal genre/class flow: **`/dev/hud`** (live HUD styling tool with copy-to-clipboard CSS), **`/dev/sprites`** (POI icon and character-sprite design review), and **`/dev/map`** (map-layer design review — route-line treatments, markers, toasts, and a genre world-skin palette picker, all against a real fetched route).
 
 ### Backends
 
