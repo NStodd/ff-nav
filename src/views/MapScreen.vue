@@ -5,6 +5,22 @@
     <button class="start-over" @click="startOver">&#8592; START OVER</button>
     <button class="profile-link" @click="router.push({ name: 'profile', params: { genreId: store.chosenGenre.id } })">PROFILE &#9658;</button>
 
+    <!-- Direction F, phase 3: multi-stop routes. A toggle rather than a
+         drag-drop map picker — arm it, then the next map tap adds a stop
+         instead of replacing the destination. Placed below the top ~130px
+         band the Android re-verification pass flagged as unreliable to tap
+         on-device (see PRODUCTION.md), not stacked with start-over/profile. -->
+    <button v-if="navigation.hasRoute" class="add-stop" :class="{ armed: addingStop }" @click="addingStop = !addingStop">
+      {{ addingStop ? 'TAP MAP TO ADD ✕' : '+ ADD STOP' }}
+    </button>
+
+    <div v-if="navigation.waypoints.length" class="waypoint-chips">
+      <div v-for="(wp, i) in navigation.waypoints" :key="wp.id" class="waypoint-chip">
+        <span>{{ i + 1 }}</span>
+        <button @click="navigation.removeWaypoint(wp.id)" aria-label="Remove stop">&times;</button>
+      </div>
+    </div>
+
     <!-- Milestone 6: one reusable Toast, rendered twice — a status lane
          (share/route-error feedback, routeError taking priority since the
          two already shared this slot before this pass) and a growth lane
@@ -60,6 +76,11 @@ const cooldownMs = computed(() => Math.round(
 // wins the slot outright rather than the two ever needing to queue.
 const statusToastText = computed(() => navigation.routeError ?? navigation.shareStatus)
 const statusToastTone = computed(() => navigation.routeError ? 'error' : 'default')
+
+// Direction F, phase 3: whether the next map click adds a waypoint instead
+// of replacing the destination — see the "+ ADD STOP" button and the click
+// handler in onMounted() below.
+const addingStop = ref(false)
 
 const mapEl = ref(null)
 let map            = null
@@ -168,6 +189,42 @@ function syncRoute() {
   })
 }
 
+// Direction F, phase 3. Numbered rather than a generic pin — order is the
+// one piece of information a stop marker actually needs to convey at a
+// glance, since the route line itself already shows the path between them.
+function waypointMarkerEl(number) {
+  const el = document.createElement('div')
+  el.className = 'waypoint-marker'
+  el.textContent = String(number)
+  return el
+}
+
+const waypointMarkers = new Map() // waypoint id -> Marker
+
+function syncWaypoints() {
+  if (!map) return
+  const current = navigation.waypoints
+  const currentIds = new Set(current.map(w => w.id))
+  for (const [id, marker] of waypointMarkers) {
+    if (currentIds.has(id)) continue
+    marker.remove()
+    waypointMarkers.delete(id)
+  }
+  current.forEach((wp, i) => {
+    const label = String(i + 1)
+    if (waypointMarkers.has(wp.id)) {
+      // Removing an earlier stop shifts every later one's number — update
+      // the existing marker's label in place rather than recreating it.
+      const marker = waypointMarkers.get(wp.id)
+      if (marker.getElement().textContent !== label) marker.getElement().textContent = label
+      marker.setLngLat([wp.lng, wp.lat])
+      return
+    }
+    const marker = new Marker({ element: waypointMarkerEl(label) }).setLngLat([wp.lng, wp.lat]).addTo(map)
+    waypointMarkers.set(wp.id, marker)
+  })
+}
+
 const ROUTE_BASE_WIDTH = 4
 let pulseRafId = null
 
@@ -238,14 +295,24 @@ onMounted(() => {
   })
 
   map.on('click', (e) => {
+    const latLng = { lat: e.lngLat.lat, lng: e.lngLat.lng }
+    if (addingStop.value) {
+      // Direction F, phase 3: armed via the "+ ADD STOP" toggle — this one
+      // tap adds a waypoint instead of replacing the destination, then
+      // disarms itself so a normal map tap goes back to its usual meaning.
+      navigation.addWaypoint(latLng)
+      addingStop.value = false
+      return
+    }
     // Only Thief-family classes' personalization asks `priority`/`avoid`
     // questions — every other class's `preferences` just won't have those
     // keys, so pickRoute() in navigation.js falls back to plain "fastest"
     // for them, same as before this existed.
-    navigation.setDestination({ lat: e.lngLat.lat, lng: e.lngLat.lng }, store.preferences)
+    navigation.setDestination(latLng, store.preferences)
   })
 
   userMarker = new Marker({ element: markerEl(store.chosenClass.color) })
+  syncWaypoints() // waypoints can already be restored from localStorage by the time this mounts
 })
 
 onUnmounted(() => {
@@ -307,6 +374,7 @@ watch(() => navigation.heading, (heading) => {
 
 watch(() => navigation.route, syncRoute)
 watch(() => navigation.pois, syncPOIs, { deep: true })
+watch(() => navigation.waypoints, syncWaypoints, { deep: true })
 
 watch(() => navigation.destination, (dest) => {
   if (!map) return
@@ -439,6 +507,66 @@ watch(() => navigation.tripJustCompleted, (trip) => {
   color: var(--ff-text);
 }
 
+/* Direction F, phase 3. Sits below the top ~130px band the Android
+   re-verification pass found unreliable to tap on-device (see
+   PRODUCTION.md) — deliberately not stacked with start-over/profile at
+   top: 1rem. */
+.add-stop {
+  position: absolute;
+  z-index: 1;
+  top: 4.5rem;
+  left: 1rem;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 7px 10px;
+  background: var(--ff-panel);
+  color: var(--ff-muted);
+  border: 2px solid var(--ff-border);
+  cursor: pointer;
+}
+
+.add-stop.armed {
+  border-color: var(--ff-gold-dark);
+  color: var(--ff-gold);
+}
+
+.waypoint-chips {
+  position: absolute;
+  z-index: 1;
+  top: 6.7rem;
+  left: 1rem;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 40vw;
+}
+
+.waypoint-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 5px 6px;
+  background: var(--ff-panel);
+  color: var(--ff-text);
+  border: 1px solid var(--ff-border);
+}
+
+.waypoint-chip button {
+  background: none;
+  border: none;
+  color: var(--ff-muted);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  padding: 0;
+}
+
+.waypoint-chip button:hover {
+  color: var(--ff-text);
+}
+
 </style>
 
 <style>
@@ -476,5 +604,24 @@ watch(() => navigation.tripJustCompleted, (trip) => {
 .dest-marker-canvas {
   image-rendering: pixelated;
   filter: drop-shadow(0 0 4px var(--ff-gold)) drop-shadow(0 0 2px var(--ff-night));
+}
+
+/* An intermediate stop (Direction F, phase 3) — a plain numbered circle,
+   deliberately neither the user's class-colored arrow nor the destination's
+   gold flag, so a glance sorts "where I am" / "stops along the way" /
+   "where I'm finally headed" by shape and color alike, not just position. */
+.waypoint-marker {
+  width:  18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ff-panel);
+  border: 2px solid var(--ff-muted);
+  color: var(--ff-text);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
 }
 </style>

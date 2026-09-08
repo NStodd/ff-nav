@@ -104,6 +104,12 @@
               maxlength="32"
             />
             <span class="place-coords">{{ dest.lat.toFixed(4) }}, {{ dest.lng.toFixed(4) }}</span>
+            <PixelButton
+              v-if="navigation.hasRoute"
+              variant="ghost"
+              :classColor="store.chosenClass.color"
+              @click="addSavedAsStop(dest)"
+            >+ STOP</PixelButton>
             <PixelButton variant="ghost" :classColor="store.chosenClass.color" @click="goToSaved(dest)">GO</PixelButton>
             <button class="remove-btn" @click="profile.removeSavedDestination(dest.id)" aria-label="Remove">&times;</button>
           </div>
@@ -168,6 +174,15 @@ function addMember() {
 // followed since Milestone 5.
 function goToSaved(dest) {
   navigation.setDestination({ lat: dest.lat, lng: dest.lng }, store.preferences)
+  router.push({ name: 'map', params: { genreId: store.chosenGenre.id } })
+}
+
+// Direction F, phase 3: the other way to build a multi-stop trip besides
+// arming "+ ADD STOP" on the map itself — only shown once a trip is already
+// underway (`navigation.hasRoute`), since a waypoint only means anything
+// relative to an existing destination.
+function addSavedAsStop(dest) {
+  navigation.addWaypoint({ lat: dest.lat, lng: dest.lng })
   router.push({ name: 'map', params: { genreId: store.chosenGenre.id } })
 }
 </script>

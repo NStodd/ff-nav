@@ -10,6 +10,7 @@ import { ref, computed, watch } from 'vue'
 const OSRM_BASE     = import.meta.env.VITE_OSRM_BASE ?? 'https://router.project-osrm.org/route/v1/driving'
 const OVERPASS_BASE = import.meta.env.VITE_OVERPASS_BASE ?? 'https://overpass-api.de/api/interpreter'
 const DEST_KEY = 'crystalpath-destination'
+const WAYPOINTS_KEY = 'crystalpath-waypoints'
 // One retry, after a short delay, before a route fetch gives up and surfaces
 // `routeError` — the public OSRM demo server is flaky enough (timeouts,
 // occasional rate limiting) that a single retry clears most transient
@@ -24,6 +25,16 @@ export const PRIVACY_BLACKOUT_MS = 6000
 // jitter on foot/in a car is easily 10-20m, so this has to be generous enough
 // not to miss an arrival, not so generous it fires a block early.
 const ARRIVAL_RADIUS_M = 40
+
+// OSRM natively supports more than two coordinates in one request — a
+// multi-stop trip is just a longer semicolon-separated list, and its
+// response already comes back with one `legs[]` entry per hop. analyzeRoute()
+// and flattenSteps() below already walk `route.legs` generically, so neither
+// needed any change to support this; only the URL construction and the
+// waypoint list itself are new.
+function buildCoordsString(origin, waypointList, dest) {
+  return [origin, ...waypointList, dest].map(p => `${p.lng},${p.lat}`).join(';')
+}
 
 function haversineMeters(a, b) {
   const R = 6371000
@@ -170,6 +181,17 @@ export const useNavigationStore = defineStore('navigation', () => {
   const savedDest = localStorage.getItem(DEST_KEY)
   const destination = ref(savedDest ? JSON.parse(savedDest) : null) // { lat, lng } | null
 
+  // Direction F, phase 3: multi-stop routes. Waypoints are intermediate
+  // stops between the current position and `destination` — `destination`
+  // itself stays the single, final stop everywhere else in the app already
+  // assumes one (the destination marker, the saved-destination star,
+  // arrival XP), so this is purely additive rather than replacing that
+  // concept with an array. Persisted the same way `destination` is, for the
+  // same reason: a reload mid-multi-stop-trip should restore the plan, not
+  // silently drop it back to a single leg.
+  const savedWaypoints = localStorage.getItem(WAYPOINTS_KEY)
+  const waypoints = ref(savedWaypoints ? JSON.parse(savedWaypoints) : []) // [{ id, lat, lng }, ...], in visiting order
+
   const position    = ref(null)  // { lat, lng }
   // Direction/heading of travel in degrees, `null` when the device hasn't
   // reported one yet (stationary, indoors, no compass) — most browsers only
@@ -210,6 +232,21 @@ export const useNavigationStore = defineStore('navigation', () => {
     if (dest) localStorage.setItem(DEST_KEY, JSON.stringify(dest))
     else localStorage.removeItem(DEST_KEY)
   })
+
+  watch(waypoints, (wps) => {
+    if (wps.length) localStorage.setItem(WAYPOINTS_KEY, JSON.stringify(wps))
+    else localStorage.removeItem(WAYPOINTS_KEY)
+  }, { deep: true })
+
+  // The prefs a caller most recently supplied to fetchRoute()/setDestination()
+  // — remembered (not reactive, just a closure variable) so the two
+  // internally-triggered refetches below (reaching a waypoint, adding/
+  // removing one) can pass *something* sensible to pickRoute() without this
+  // store reaching into player.js for `store.preferences` itself. Every other
+  // cross-store value here (prefs, interestText, party) is still passed in by
+  // the caller for the *first* fetch of any given action; this only covers
+  // the refetches this store triggers on its own afterward.
+  let lastPrefs = {}
 
   const hasRoute = computed(() => route.value.length > 0)
   const etaFormatted = computed(() => {
@@ -304,8 +341,9 @@ export const useNavigationStore = defineStore('navigation', () => {
   async function fetchRoute(origin, dest, prefs = {}, _isRetry = false) {
     if (fetchingRoute.value) return
     fetchingRoute.value = true
+    lastPrefs = prefs
     try {
-      const url = `${OSRM_BASE}/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`
+      const url = `${OSRM_BASE}/${buildCoordsString(origin, waypoints.value, dest)}?overview=full&geometries=geojson&steps=true&alternatives=true`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`OSRM responded ${res.status}`)
       const data = await res.json()
@@ -338,7 +376,25 @@ export const useNavigationStore = defineStore('navigation', () => {
   // reaching into `chosenClass` itself.
   async function setDestination(latLng, prefs = {}) {
     destination.value = latLng
+    // A fresh destination starts a fresh trip — any stops planned for the
+    // *previous* destination don't carry over to this one. Add stops to the
+    // current trip via addWaypoint() afterward, same as always.
+    waypoints.value = []
     if (position.value) await fetchRoute(position.value, latLng, prefs)
+  }
+
+  // Adds an intermediate stop to the current trip and re-fetches immediately
+  // — no-ops without a destination already set, since a waypoint only means
+  // anything relative to a trip that's already going somewhere.
+  async function addWaypoint(latLng) {
+    if (!destination.value) return
+    waypoints.value = [...waypoints.value, { id: crypto.randomUUID(), lat: latLng.lat, lng: latLng.lng }]
+    if (position.value) await fetchRoute(position.value, destination.value, lastPrefs)
+  }
+
+  async function removeWaypoint(id) {
+    waypoints.value = waypoints.value.filter(w => w.id !== id)
+    if (position.value && destination.value) await fetchRoute(position.value, destination.value, lastPrefs)
   }
 
   // Arrival detection — a real navigation feature this store never had: every
@@ -356,11 +412,25 @@ export const useNavigationStore = defineStore('navigation', () => {
     if (haversineMeters(pos, dest) <= ARRIVAL_RADIUS_M) {
       tripJustCompleted.value = { distanceMeters: routeDistanceMeters.value ?? haversineMeters(pos, dest) }
       destination.value = null
+      waypoints.value = []
       route.value = []
       eta.value = null
       routeDistanceMeters.value = null
       steps.value = []
       currentStepIndex.value = 0
+    }
+  })
+
+  // Reaching an intermediate stop is not finishing the trip — no XP, no
+  // tripJustCompleted, just quietly drop it from the pending list and
+  // re-fetch toward whatever's left, the same "no popup, just keep going"
+  // spirit as the Speedrunner archetype's silent reroute. Only the *final*
+  // destination (the watcher above) completes a trip.
+  watch([position, waypoints], ([pos, wps]) => {
+    if (!pos || !wps.length) return
+    if (haversineMeters(pos, wps[0]) <= ARRIVAL_RADIUS_M) {
+      waypoints.value = wps.slice(1)
+      if (destination.value) fetchRoute(pos, destination.value, lastPrefs)
     }
   })
 
@@ -442,10 +512,13 @@ export const useNavigationStore = defineStore('navigation', () => {
   async function attemptReroute(prefs = {}) {
     if (!position.value || !destination.value || rerouting.value) return false
     rerouting.value = true
+    lastPrefs = prefs
     try {
-      const { lat, lng } = position.value
       const dest = destination.value
-      const url = `${OSRM_BASE}/${lng},${lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`
+      // Includes whatever stops are still pending — a reroute mid-multi-stop
+      // trip needs to keep visiting them, not silently drop straight to the
+      // final destination.
+      const url = `${OSRM_BASE}/${buildCoordsString(position.value, waypoints.value, dest)}?overview=full&geometries=geojson&steps=true&alternatives=true`
       const res  = await fetch(url)
       const data = await res.json()
       const routes = data.routes ?? []
@@ -537,6 +610,7 @@ export const useNavigationStore = defineStore('navigation', () => {
   function goDark(durationMs = PRIVACY_BLACKOUT_MS) {
     pois.value        = []
     destination.value = null
+    waypoints.value   = []
     route.value       = []
     eta.value         = null
     position.value    = null
@@ -558,6 +632,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     position.value    = null
     heading.value     = null
     destination.value = null
+    waypoints.value   = []
     route.value       = []
     eta.value         = null
     pois.value        = []
@@ -575,11 +650,12 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   return {
-    position, heading, destination, route, eta, pois, revealing, rerouting, fetchingRoute,
+    position, heading, destination, waypoints, route, eta, pois, revealing, rerouting, fetchingRoute,
     shareStatus, routeError, privacyActive,
     routeDistanceMeters, tripJustCompleted,
     hasRoute, etaFormatted, currentManeuver,
     setPosition, startWatching, stopWatching, setDestination, fetchRoute,
+    addWaypoint, removeWaypoint,
     revealPOIs, attemptReroute, shareETA, goDark, acknowledgeTripCompletion, reset,
   }
 })
