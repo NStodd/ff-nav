@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§28) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§29) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -471,6 +471,21 @@ First piece of §8, picked as the smallest and most contained per its own spec: 
 
 **Verified against real Overpass data, not synthetic POIs**: swept real POIs via SCOUT, captured the actual Overpass response, moved simulated position onto a real returned POI's exact coordinates across two consecutive position updates — marker count dropped by exactly two (one per update, confirming the one-at-a-time throttle), and the persisted profile's `pickupsCollected` counter incremented to match. Separately confirmed the backward-compatibility backfill: manually stripped the field from a persisted profile, reloaded, and the profile screen showed `0`, not blank or `NaN`. Zero console/page errors.
 
+### 29. Milestone 8, phase 2: quests
+
+**Files created:** `src/data/quests.js`
+**Files changed:** `src/stores/profile.js`, `src/views/MapScreen.vue`, `src/views/ProfileScreen.vue`
+
+Second piece of §8. Unlike world-skinning (§9), which is genuinely novel per-genre design work and piloting on FF for exactly that reason, quests are content authoring over a mechanism that either works for every genre or none — so all four genres got a matching 5-quest set from the start, the same "prove it generalizes immediately" approach classes/sprites/personalization all took, not a sequential rollout.
+
+**The central rule, straight from §8's own spec, held all the way through implementation:** every one of the 20 quests' objectives (`tripsCompleted`, `distanceMeters`, `abilitiesUsed`, `poisDiscovered`, `pickupsCollected` — one of each, per genre) maps directly to a field `profile.js`'s `blankClassProgress()` already produces. `questProgress()`/`isQuestComplete()` in `quests.js` just read that field live; nothing about a quest's progress is separately tracked or can drift out of sync with the stat it's actually about. The one deliberately deferred piece, also called out in the original spec: a `visitPlace` objective type (a real landmark, not an existing counter) needs genuinely new real-time tracking and stayed out of this pass.
+
+**The one new piece of persisted state, and only that**: `claimedQuestIds` inside each class's own progress object (claiming is per-class, same as everything else in `profile.js` — replaying the same objective under a *different* class earns it again) and `claimQuest(classId, questId, xpReward, classData)`, which no-ops on an id that's already claimed rather than granting the reward twice.
+
+**Auto-claimed, no separate "claim" tap** — a manual claim step would be the one interaction this app's driver-attention principle doesn't ask for anywhere else. `MapScreen.vue` watches the current class's progress object deeply (it's mutated in place, not reassigned, so a shallow watch would never see the change) and checks every quest in the *current genre* on each stat change, claiming and toasting the instant one crosses its threshold. Given `immediate: true` specifically so a class whose stats already exceeded a quest's threshold before this milestone existed gets credited on the very next map visit, not stuck waiting for that same stat to happen to change again.
+
+**Verified against real, live gameplay, not fixture data**: triggered a real SCOUT sweep (a live Overpass response with well over 20 real POIs) and watched "Cartographer of the Unknown" (20 POIs) auto-complete and persist across a reload with no interaction beyond the ability press itself; separately, a real near-instant trip completion correctly auto-completed "First Steps" with a toast showing the actual post-EXP-multiplier XP amount, not the base reward value. One nice emergent confirmation, not staged: "Treasure Seeker" (5 pickups) already showed real progress in the same run, purely from Milestone 8 phase 1's pickup watcher firing ambiently — direct proof the two features compose correctly without any special-casing between them. One cosmetic bug caught and fixed during this verification: the ✓ checkmark character isn't in the Press Start 2P font and rendered as a stray glyph in the "DONE" badge — dropped it, plain text reads just as clearly. Zero console/page errors throughout.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -749,7 +764,7 @@ A Playwright test that scripts geolocation along a real fetched route's own coor
 
 ## 8. Quests, pickups, and deeper progression
 
-**Pickups implemented — see §28.** Quests and deeper growth (titles, cosmetic unlocks, skill points) remain proposed, as written below.
+**Pickups implemented — see §28. Quests implemented — see §29** (all four genres, not just FF — see §29 for why quests got the "build once, prove it generalizes across all genres immediately" treatment rather than an FF-only pilot). Deeper growth (titles, cosmetic unlocks, skill points) remains proposed, as written below.
 
 Everything Direction F built deepened *navigation*; this deepens the *genre/RPG layer* the other direction — the abstraction `Genres.md` describes (a shell four RPG-flavored genres plug into) has stayed at "class, sprite, ability, growth" since Milestone 5. Quests, pickups, and richer growth are the next layer of that abstraction, not a new one bolted on beside it.
 

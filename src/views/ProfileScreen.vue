@@ -62,6 +62,25 @@
         </div>
       </section>
 
+      <section class="quests">
+        <h2>QUESTS</h2>
+        <p class="hint">Real progress, not busywork — every objective here tracks something you're already doing. Claimed the moment you cross the line, no extra tap needed.</p>
+
+        <div class="quest-list">
+          <div v-for="q in genreQuests" :key="q.id" class="quest-card" :class="{ done: isDone(q) }" :style="{ '--cc': store.chosenClass.color }">
+            <div class="quest-header">
+              <span class="quest-title">{{ q.title }}</span>
+              <span v-if="isDone(q)" class="quest-done-badge">DONE</span>
+            </div>
+            <p class="quest-flavor">{{ q.flavor }}</p>
+            <div class="quest-progress-row">
+              <div class="quest-progress-bar"><div class="quest-progress-fill" :style="{ width: progressPct(q) + '%' }" /></div>
+              <span class="quest-progress-text">{{ progressText(q) }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section v-if="otherClasses.length" class="other-classes">
         <h2>OTHER PATHS WALKED</h2>
         <div class="other-list">
@@ -131,6 +150,7 @@ import { usePlayerStore } from '@/stores/player.js'
 import { useProfileStore } from '@/stores/profile.js'
 import { useNavigationStore } from '@/stores/navigation.js'
 import { findClassById } from '@/data/genres.js'
+import { questsForGenre, questProgress } from '@/data/quests.js'
 import StarField from '@/components/StarField.vue'
 import PixelDivider from '@/components/PixelDivider.vue'
 import PixelButton from '@/components/PixelButton.vue'
@@ -144,10 +164,32 @@ const navigation  = useNavigationStore()
 const progress = computed(() => profile.xpProgressOf(store.chosenClass.id))
 const current  = computed(() => profile.progressFor(store.chosenClass.id))
 
-const distanceLabel = computed(() => {
-  const m = current.value.distanceMeters
+function formatMeters(m) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`
-})
+}
+
+const distanceLabel = computed(() => formatMeters(current.value.distanceMeters))
+
+// Milestone 8, phase 2: quests. `genreQuests` reads the *current* genre —
+// a quest's flavor text is genre-voiced, so it only makes sense to show
+// where it belongs, even though the underlying stat it derives from
+// (current.value, this class's own progress) isn't genre-scoped itself.
+const genreQuests = computed(() => questsForGenre(store.chosenGenre.id))
+
+function isDone(quest) {
+  return current.value.claimedQuestIds?.includes(quest.id) ?? false
+}
+
+function progressPct(quest) {
+  const { current: c, target } = questProgress(quest, current.value)
+  return Math.round((c / target) * 100)
+}
+
+function progressText(quest) {
+  const { current: c, target } = questProgress(quest, current.value)
+  if (quest.objective.type === 'distanceMeters') return `${formatMeters(c)} / ${formatMeters(target)}`
+  return `${c} / ${target}`
+}
 
 // Any other class with tracked progress — reads across every genre's roster
 // via findClassById(), not just the currently active one, since profile.js
@@ -512,5 +554,81 @@ h2 {
   font-size: 6px;
   color: var(--ff-muted);
   flex-shrink: 0;
+}
+
+.quests {
+  width: 100%;
+}
+
+.quest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.quest-card {
+  padding: 0.75rem 0.9rem;
+  background: var(--ff-panel);
+  border: 1px solid var(--ff-border);
+}
+
+.quest-card.done {
+  border-color: var(--cc);
+}
+
+.quest-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.quest-title {
+  font-size: 8px;
+  color: var(--ff-text);
+}
+
+.quest-done-badge {
+  font-size: 6.5px;
+  color: var(--cc);
+  flex-shrink: 0;
+}
+
+.quest-flavor {
+  font-size: 6.5px;
+  color: var(--ff-muted);
+  line-height: 1.6;
+  margin-bottom: 0.6rem;
+}
+
+.quest-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.quest-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--ff-dark);
+  border: 1px solid var(--ff-border);
+}
+
+.quest-progress-fill {
+  height: 100%;
+  background: var(--cc);
+  transition: width 0.3s ease;
+}
+
+.quest-card.done .quest-progress-fill {
+  background: var(--ff-gold);
+}
+
+.quest-progress-text {
+  font-size: 6px;
+  color: var(--ff-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 </style>

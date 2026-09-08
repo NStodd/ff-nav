@@ -42,6 +42,7 @@ import { useNavigationStore, PRIVACY_BLACKOUT_MS } from '@/stores/navigation.js'
 import { useProfileStore } from '@/stores/profile.js'
 import { iconForCategory } from '@/data/poiIcons.js'
 import { iconForManeuver } from '@/data/maneuverIcons.js'
+import { questsForGenre, isQuestComplete } from '@/data/quests.js'
 import HudOverlay from '@/components/HudOverlay.vue'
 import Toast from '@/components/Toast.vue'
 
@@ -463,6 +464,28 @@ watch(() => navigation.pickupJustCollected, (pickup) => {
   showXpToast(leveledUp ? `Picked up ${label} — +${xpGranted} XP — LEVEL UP!` : `Picked up ${label} — +${xpGranted} XP`)
   navigation.acknowledgePickupCollected()
 })
+
+// Milestone 8, phase 2: quests. Auto-claimed the instant an objective
+// crosses its threshold — no separate "claim" tap, consistent with every
+// other XP source in this app (a manual claim step would be one more
+// interaction this app's driver-attention principle doesn't ask for
+// anywhere else). Watches the current class's own progress object deeply
+// (mutated in place by profile.js, not reassigned, so a shallow watch would
+// never fire) and re-checks every quest in the *current* genre on every
+// stat change — cheap, since the quest list per genre is small. `immediate`
+// so a class whose stats already crossed a threshold before this milestone
+// existed gets it granted on the very next map visit, not only the next
+// time that same stat happens to change again.
+watch(() => profile.progressFor(store.chosenClass.id), (stats) => {
+  for (const quest of questsForGenre(store.chosenGenre.id)) {
+    if (stats.claimedQuestIds.includes(quest.id)) continue
+    if (!isQuestComplete(quest, stats)) continue
+    const { leveledUp, xpGranted } = profile.claimQuest(store.chosenClass.id, quest.id, quest.reward.xp, store.chosenClass)
+    showXpToast(leveledUp
+      ? `Quest complete: ${quest.title} — +${xpGranted} XP — LEVEL UP!`
+      : `Quest complete: ${quest.title} — +${xpGranted} XP`)
+  }
+}, { deep: true, immediate: true })
 </script>
 
 <style scoped>

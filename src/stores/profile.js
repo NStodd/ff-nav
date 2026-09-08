@@ -36,6 +36,7 @@ function blankClassProgress() {
     abilitiesUsed:    0,
     poisDiscovered:   0,
     pickupsCollected: 0,
+    claimedQuestIds:  [], // Milestone 8, phase 2 — see recordQuestClaimed() below
   }
 }
 
@@ -64,12 +65,17 @@ export const useProfileStore = defineStore('profile', () => {
   function progressFor(classId) {
     if (!classes.value[classId]) {
       classes.value[classId] = blankClassProgress()
-    } else if (classes.value[classId].pickupsCollected === undefined) {
-      // Backfills a field added after this class's progress already existed
-      // (pickupsCollected, Milestone 8) — a real profile persisted before
-      // this pass would otherwise read `undefined` here forever, since
-      // existing entries are never re-run through blankClassProgress().
-      classes.value[classId].pickupsCollected = 0
+    } else {
+      // Backfills fields added after this class's progress already existed
+      // (pickupsCollected, claimedQuestIds — Milestone 8) — a real profile
+      // persisted before either pass would otherwise read `undefined`/throw
+      // on `.includes()` forever, since existing entries are never re-run
+      // through blankClassProgress(). Checked individually rather than a
+      // wholesale re-merge, which would reassign the object on every single
+      // call for nothing.
+      const p = classes.value[classId]
+      if (p.pickupsCollected === undefined) p.pickupsCollected = 0
+      if (p.claimedQuestIds === undefined) p.claimedQuestIds = []
     }
     return classes.value[classId]
   }
@@ -125,6 +131,23 @@ export const useProfileStore = defineStore('profile', () => {
     const progress = progressFor(classId)
     progress.pickupsCollected++
     return addXP(classId, PICKUP_XP, classData)
+  }
+
+  // Milestone 8, phase 2: quests. `questProgress()`/`isQuestComplete()` in
+  // quests.js already derive completion from this store's own counters —
+  // this store still doesn't import quests.js or know what a "quest" is
+  // beyond "an id and a reward," same as `revealPOIs()` not knowing what
+  // `interestText` means. `MapScreen.vue` is what actually checks completion
+  // and calls this once a quest crosses its threshold. Safe to call more
+  // than once for the same quest — already-claimed ids are a no-op, not a
+  // second reward, since the reward is only ever "granted" via `addXP()`.
+  function claimQuest(classId, questId, xpReward, classData) {
+    const progress = progressFor(classId)
+    if (progress.claimedQuestIds.includes(questId)) {
+      return { leveledUp: false, level: levelOf(classId), xpGranted: 0, alreadyClaimed: true }
+    }
+    progress.claimedQuestIds = [...progress.claimedQuestIds, questId]
+    return { ...addXP(classId, xpReward, classData), alreadyClaimed: false }
   }
 
   function recordTripCompleted(classId, distanceMeters, classData) {
@@ -202,7 +225,7 @@ export const useProfileStore = defineStore('profile', () => {
   return {
     classes, party, savedDestinations,
     progressFor, levelOf, xpProgressOf,
-    recordAbilityUsed, recordPOIsDiscovered, recordPickupCollected, recordTripCompleted,
+    recordAbilityUsed, recordPOIsDiscovered, recordPickupCollected, recordTripCompleted, claimQuest,
     powerMultiplier, cooldownMultiplier,
     addPartyMember, removePartyMember,
     addSavedDestination, removeSavedDestination, renameSavedDestination, findSavedDestinationNear,

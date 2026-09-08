@@ -94,6 +94,20 @@ A `watch([position, pois], ...)` in `navigation.js`, structurally identical to t
 
 ---
 
+## Quests (Milestone 8, phase 2)
+
+`src/data/quests.js` holds the quest definitions — flat array, `genreId`-tagged, 5 per genre (20 total): one each for `tripsCompleted`, `distanceMeters`, `abilitiesUsed`, `poisDiscovered`, and `pickupsCollected`. **Every objective type maps directly to a field `profile.js`'s `blankClassProgress()` already produces** — the central design rule from `PLANNING.md` §8: quest progress is *derived* by reading that field live, never duplicated into its own tracked counter. `questProgress(quest, stats)` and `isQuestComplete(quest, stats)` in `quests.js` are the only two functions that know how to read a quest's objective; `profile.js` itself has no idea what a "quest" is beyond an id and an XP amount, same arm's-length relationship every other `record*` function keeps with the genre/class data that calls it.
+
+The one thing that genuinely needed new persisted state: **which quests have been claimed**, so a reward isn't re-granted every time the same already-crossed threshold is re-checked. `claimedQuestIds` (a plain array, inside each class's own progress object — claiming is per-class, same as everything else here, so replaying the same objective under a *different* class earns it again) and `claimQuest(classId, questId, xpReward, classData)`, which no-ops safely if the id's already in the list rather than granting twice.
+
+**Auto-claimed, not a separate "claim" tap** — `MapScreen.vue` watches the current class's own progress object (deeply; `profile.js` mutates it in place rather than reassigning, so a shallow watch would never fire) and checks every quest in the *current genre* against it on every stat change, claiming and toasting the instant one crosses its threshold. `immediate: true` on that watcher specifically so a class whose stats already exceeded a quest's threshold *before this milestone existed* gets credited on the very next map visit, not only the next time that stat happens to change again.
+
+**Quests are genre-voiced but not genre-scoped in the data they read.** `ProfileScreen.vue`'s "QUESTS" section only shows the current genre's five cards (an FF quest reads oddly once you're playing Star Voyager), but the underlying stats they check are the *current class's*, same as every other stat tile on that screen — there's no separate "genre progress," only class progress, filtered for display by genre.
+
+**Deferred, not forgotten**: a `visitPlace` objective type (a real lat/lng + radius, tied to an actual landmark) was scoped in the original plan but needs a genuinely new real-time tracking mechanism — nothing to derive from an existing counter — so it's left for a later pass rather than expanding this one.
+
+---
+
 ## The party roster
 
 `addPartyMember(name, note)` / `removePartyMember(id)` manage a plain local array — no accounts, no sync, no live location of anyone but the player. Two places call them: `ProfileScreen.vue` (ongoing management) and, since this pass, a dedicated **`PartyStep.vue`** onboarding step — `'party'` in `onboardingSteps`, present on all sixteen classes now, positioned right after the ability reveal (and after `personalize` for the four FF classes that have one). Every class has its own `partyPrompt` flavor line in the same voice as its `intro`/`locationPrompt` (bold for Adventurer, terse for Speedrunner, warm for Connector, ominous-and-skippable for Sovereign — a Black Mage/Overseer/Outlaw/Captain's prompt leans into reluctance rather than pretending privacy-focused classes are suddenly social). The step is never mandatory: "Continue" only requires the typewriter to finish, not that anyone actually got added.
@@ -118,7 +132,7 @@ Direction F's first phase: a persisted place list, independent of genre/class (u
 
 `/:genreId/profile`, reached from a "PROFILE ▶" button on the map screen (opposite "← START OVER," so neither competes with the HUD's own bottom-anchored controls) — and left the same way, back to the map. Deliberately a **navigation**, not an overlay: the point of building this after establishing the driver-attention principle is that progress is something you go look at, not something that appears on top of the map while you're mid-trip.
 
-Shows, for the currently chosen class: the sprite and stats (reusing the same pip rendering convention as `HudOverlay`/`ClassCard` — a `LEVEL` row now sits alongside `STR`/`EXP`/`AGI`, same five-box visual language, not a new one), the XP figure and how much more is needed for the next level (via `xpProgressOf()`), and the five lifetime stat tiles (trips completed, distance traveled, abilities used, POIs discovered, pickups collected) read straight off `progressFor()`.
+Shows, for the currently chosen class: the sprite and stats (reusing the same pip rendering convention as `HudOverlay`/`ClassCard` — a `LEVEL` row now sits alongside `STR`/`EXP`/`AGI`, same five-box visual language, not a new one), the XP figure and how much more is needed for the next level (via `xpProgressOf()`), the five lifetime stat tiles (trips completed, distance traveled, abilities used, POIs discovered, pickups collected) read straight off `progressFor()`, and a "QUESTS" section (Milestone 8) with a progress bar per card, reading the same `progressFor()` data through `quests.js`'s derivation helpers rather than anything ProfileScreen tracks itself.
 
 **"Other paths walked"** — classes with tracked progress other than the current one — uses a new `findClassById()` helper in `genres.js` that searches every genre's roster for a given class id. This is the same "class ids are unique across every genre, verified, not assumed" property `profile.js` already leans on to key progress without genre-scoping; the helper just makes that property useful for display instead of only for storage. Only renders when there's actually another class with progress to show.
 
