@@ -215,6 +215,11 @@ export const useNavigationStore = defineStore('navigation', () => {
   let privacyTimer = null
   const routeDistanceMeters = ref(null) // OSRM's `distance` field for the current route — used to size trip-completion XP
   const tripJustCompleted   = ref(null) // { distanceMeters } | null — see the position watcher and acknowledgeTripCompletion() below
+  // Milestone 8, phase 1: pickups. One-shot signal, same pattern as
+  // tripJustCompleted — MapScreen.vue reads it once (to award XP with the
+  // real POI name/category) and acknowledges it, rather than this store
+  // guessing at a message to show.
+  const pickupJustCollected = ref(null) // { id, name, category } | null
 
   // Turn-by-turn state. `steps` is the flattened OSRM steps array for the
   // *current* route (cleared/replaced whenever `route` itself is); nothing
@@ -434,8 +439,27 @@ export const useNavigationStore = defineStore('navigation', () => {
     }
   })
 
+  // Milestone 8, phase 1: pickups. `revealPOIs()` (the Adventurer archetype's
+  // ability) puts real POIs on the map, but until now nothing happened once
+  // you actually reached one — this closes that loop. Only ever collects one
+  // per position update (`.find`, not every POI within range at once) so a
+  // dense cluster of revealed POIs doesn't fire a burst of simultaneous
+  // pickups the instant a sweep lands near several at once.
+  watch([position, pois], ([pos, poiList]) => {
+    if (!pos || !poiList.length) return
+    const hit = poiList.find(p => haversineMeters(pos, p) <= ARRIVAL_RADIUS_M)
+    if (hit) {
+      pois.value = poiList.filter(p => p.id !== hit.id)
+      pickupJustCollected.value = { id: hit.id, name: hit.name, category: hit.category }
+    }
+  })
+
   function acknowledgeTripCompletion() {
     tripJustCompleted.value = null
+  }
+
+  function acknowledgePickupCollected() {
+    pickupJustCollected.value = null
   }
 
   // Keyword → extra Overpass node filter, for the Adventurer archetype's
@@ -638,6 +662,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     pois.value        = []
     routeDistanceMeters.value = null
     tripJustCompleted.value   = null
+    pickupJustCollected.value = null
     steps.value       = []
     currentStepIndex.value = 0
     if (shareStatusTimer) clearTimeout(shareStatusTimer)
@@ -652,10 +677,11 @@ export const useNavigationStore = defineStore('navigation', () => {
   return {
     position, heading, destination, waypoints, route, eta, pois, revealing, rerouting, fetchingRoute,
     shareStatus, routeError, privacyActive,
-    routeDistanceMeters, tripJustCompleted,
+    routeDistanceMeters, tripJustCompleted, pickupJustCollected,
     hasRoute, etaFormatted, currentManeuver,
     setPosition, startWatching, stopWatching, setDestination, fetchRoute,
     addWaypoint, removeWaypoint,
-    revealPOIs, attemptReroute, shareETA, goDark, acknowledgeTripCompletion, reset,
+    revealPOIs, attemptReroute, shareETA, goDark,
+    acknowledgeTripCompletion, acknowledgePickupCollected, reset,
   }
 })

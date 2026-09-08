@@ -56,6 +56,10 @@
           <span class="stat-value">{{ current.poisDiscovered }}</span>
           <span class="stat-label">POIS DISCOVERED</span>
         </div>
+        <div class="stat-tile">
+          <span class="stat-value">{{ current.pickupsCollected }}</span>
+          <span class="stat-label">PICKUPS COLLECTED</span>
+        </div>
       </section>
 
       <section v-if="otherClasses.length" class="other-classes">

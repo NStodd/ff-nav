@@ -12,6 +12,11 @@ const MAX_LEVEL = LEVEL_THRESHOLDS.length
 
 const ABILITY_XP          = 10
 const POI_XP              = 2
+// Milestone 8: rewarded for actually *reaching* a revealed POI, not just
+// sweeping it into view — a real "you went there," worth more than the
+// discovery XP alone, same escalation logic as trip XP scaling with real
+// distance covered.
+const PICKUP_XP           = 5
 const TRIP_BASE_XP        = 25
 const TRIP_XP_PER_KM      = 5
 
@@ -30,6 +35,7 @@ function blankClassProgress() {
     distanceMeters:   0,
     abilitiesUsed:    0,
     poisDiscovered:   0,
+    pickupsCollected: 0,
   }
 }
 
@@ -56,7 +62,15 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   function progressFor(classId) {
-    if (!classes.value[classId]) classes.value[classId] = blankClassProgress()
+    if (!classes.value[classId]) {
+      classes.value[classId] = blankClassProgress()
+    } else if (classes.value[classId].pickupsCollected === undefined) {
+      // Backfills a field added after this class's progress already existed
+      // (pickupsCollected, Milestone 8) — a real profile persisted before
+      // this pass would otherwise read `undefined` here forever, since
+      // existing entries are never re-run through blankClassProgress().
+      classes.value[classId].pickupsCollected = 0
+    }
     return classes.value[classId]
   }
 
@@ -100,6 +114,17 @@ export const useProfileStore = defineStore('profile', () => {
     const progress = progressFor(classId)
     progress.poisDiscovered += count
     return addXP(classId, POI_XP * count, classData)
+  }
+
+  // Milestone 8, phase 1: pickups. Closes the "SCOUT reveals a POI but
+  // visiting it does nothing" gap — navigation.js detects the real proximity
+  // event (arriving within range of a revealed POI) and hands off just the
+  // classId, the same "this store doesn't know GENRES/CLASSES exist" pattern
+  // every other record* function already follows.
+  function recordPickupCollected(classId, classData) {
+    const progress = progressFor(classId)
+    progress.pickupsCollected++
+    return addXP(classId, PICKUP_XP, classData)
   }
 
   function recordTripCompleted(classId, distanceMeters, classData) {
@@ -177,7 +202,7 @@ export const useProfileStore = defineStore('profile', () => {
   return {
     classes, party, savedDestinations,
     progressFor, levelOf, xpProgressOf,
-    recordAbilityUsed, recordPOIsDiscovered, recordTripCompleted,
+    recordAbilityUsed, recordPOIsDiscovered, recordPickupCollected, recordTripCompleted,
     powerMultiplier, cooldownMultiplier,
     addPartyMember, removePartyMember,
     addSavedDestination, removeSavedDestination, renameSavedDestination, findSavedDestinationNear,

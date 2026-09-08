@@ -23,6 +23,7 @@ This is also why `pois` (in `navigation.js`, ephemeral, wiped by the Sovereign a
       distanceMeters:  number, // lifetime, across all trips
       abilitiesUsed:   number,
       poisDiscovered:  number, // lifetime — never decremented, unlike navigation.pois
+      pickupsCollected: number, // lifetime — Milestone 8, see "Pickups" below
     },
   },
   party: [
@@ -52,6 +53,7 @@ XP sources (base amounts, before the EXP-stat multiplier below):
 |---|---|---|
 | Ability used | 10 | `MapScreen.vue`'s `onAbility()`, every archetype |
 | POI discovered | 2 each | Same call, only for `'reveal'`-type classes, only for *newly* found POIs |
+| Pickup collected | 5 each | `MapScreen.vue`'s watcher on `navigation.pickupJustCollected` — see "Pickups" below |
 | Trip completed | 25 + 5/km | `MapScreen.vue`'s watcher on `navigation.tripJustCompleted` |
 
 Every `record*` function returns `{ leveledUp, level, xpGranted }` — `xpGranted` is the actual post-multiplier amount, not the base table value above. Callers displaying a number (the XP toast) use `xpGranted`, not the base — an earlier pass through this showed a toast reading "+90 XP" while the store had actually added 104, which is the kind of drift that's obviously wrong the first time a player notices it doesn't match.
@@ -82,6 +84,16 @@ This didn't exist anywhere in the codebase before this pass — `navigation.js` 
 
 ---
 
+## Pickups (Milestone 8, phase 1)
+
+`revealPOIs()` (the Adventurer archetype's ability) has put real POIs on the map since Milestone 4; reaching one never did anything until this pass — the first piece of §8's quests/pickups/growth initiative, picked first for being the smallest, most contained extension of a mechanic that already existed.
+
+A `watch([position, pois], ...)` in `navigation.js`, structurally identical to the waypoint-arrival watcher multi-stop routes added, removes a reached POI from `pois` and fires a one-shot `pickupJustCollected` signal (same shape/pattern as `tripJustCompleted`). `MapScreen.vue` reads it, calls `recordPickupCollected(classId, classData)` (mirrors `recordAbilityUsed` exactly — a lifetime `pickupsCollected` counter plus 5 base XP), and shows a toast naming the real place. Collects one POI per position update, not everything within range at once, if several revealed POIs happen to be clustered — incidental, not an engineered rate limit, but a real one.
+
+**Worth knowing if you're adding a field to `profile.js` after this**: `progressFor()` only creates a *new* class entry through `blankClassProgress()` — it doesn't retroactively backfill new fields into classes that already have progress. `pickupsCollected` needed a small explicit backfill inside `progressFor()` (check specifically for the missing field, set it to `0`) so a profile that existed before this pass doesn't read `undefined` forever. A wholesale re-merge on every read would've been simpler to write but reassigns the object on every single call — worth the few extra lines to avoid.
+
+---
+
 ## The party roster
 
 `addPartyMember(name, note)` / `removePartyMember(id)` manage a plain local array — no accounts, no sync, no live location of anyone but the player. Two places call them: `ProfileScreen.vue` (ongoing management) and, since this pass, a dedicated **`PartyStep.vue`** onboarding step — `'party'` in `onboardingSteps`, present on all sixteen classes now, positioned right after the ability reveal (and after `personalize` for the four FF classes that have one). Every class has its own `partyPrompt` flavor line in the same voice as its `intro`/`locationPrompt` (bold for Adventurer, terse for Speedrunner, warm for Connector, ominous-and-skippable for Sovereign — a Black Mage/Overseer/Outlaw/Captain's prompt leans into reluctance rather than pretending privacy-focused classes are suddenly social). The step is never mandatory: "Continue" only requires the typewriter to finish, not that anyone actually got added.
@@ -106,7 +118,7 @@ Direction F's first phase: a persisted place list, independent of genre/class (u
 
 `/:genreId/profile`, reached from a "PROFILE ▶" button on the map screen (opposite "← START OVER," so neither competes with the HUD's own bottom-anchored controls) — and left the same way, back to the map. Deliberately a **navigation**, not an overlay: the point of building this after establishing the driver-attention principle is that progress is something you go look at, not something that appears on top of the map while you're mid-trip.
 
-Shows, for the currently chosen class: the sprite and stats (reusing the same pip rendering convention as `HudOverlay`/`ClassCard` — a `LEVEL` row now sits alongside `STR`/`EXP`/`AGI`, same five-box visual language, not a new one), the XP figure and how much more is needed for the next level (via `xpProgressOf()`), and the four lifetime stat tiles (trips completed, distance traveled, abilities used, POIs discovered) read straight off `progressFor()`.
+Shows, for the currently chosen class: the sprite and stats (reusing the same pip rendering convention as `HudOverlay`/`ClassCard` — a `LEVEL` row now sits alongside `STR`/`EXP`/`AGI`, same five-box visual language, not a new one), the XP figure and how much more is needed for the next level (via `xpProgressOf()`), and the five lifetime stat tiles (trips completed, distance traveled, abilities used, POIs discovered, pickups collected) read straight off `progressFor()`.
 
 **"Other paths walked"** — classes with tracked progress other than the current one — uses a new `findClassById()` helper in `genres.js` that searches every genre's roster for a given class id. This is the same "class ids are unique across every genre, verified, not assumed" property `profile.js` already leans on to key progress without genre-scoping; the helper just makes that property useful for display instead of only for storage. Only renders when there's actually another class with progress to show.
 

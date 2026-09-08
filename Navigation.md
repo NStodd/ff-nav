@@ -52,7 +52,8 @@ LocationPermissionStep          MapScreen
 | `route` | `[[lng, lat], ...]` | GeoJSON coordinate order (**lng first**), because it's fed directly into a MapLibre `LineString` geometry — don't flip it to `[lat, lng]` without also updating `MapScreen.vue`'s `syncRoute()`. |
 | `eta` | seconds \| `null` | Raw OSRM `duration` field. |
 | `watcherId` | geolocation watch ID \| `null` | Internal; not returned from the store's public surface beyond `startWatching`/`stopWatching`. |
-| `pois` | `[{ id, lat, lng, name, category }, ...]` | Points revealed by the Adventurer archetype's ability (SCOUT/SCAN/TRAILBLAZE/SPYGLASS). Accumulates across sweeps — nothing ever un-reveals a POI. |
+| `pois` | `[{ id, lat, lng, name, category }, ...]` | Points revealed by the Adventurer archetype's ability (SCOUT/SCAN/TRAILBLAZE/SPYGLASS). Accumulates across sweeps, minus whatever's since been collected as a pickup (Milestone 8) — that's the one thing that *does* un-reveal a POI. |
+| `pickupJustCollected` | `{ id, name, category } \| null` | One-shot signal, same pattern as `tripJustCompleted` — set when live position reaches a revealed POI, read once by `MapScreen.vue` (to award XP with the real name) and acknowledged via `acknowledgePickupCollected()`. |
 | `revealing` | boolean | True while a `revealPOIs()` sweep is in flight; guards against overlapping requests if the ability button is mashed faster than the network responds. |
 | `rerouting` | boolean | Same guard as `revealing`, for `attemptReroute()`. |
 | `fetchingRoute` | boolean | Same guard, for `fetchRoute()` — prevents a position update's catch-up fetch (see below) from racing a destination-tap's own fetch. |
@@ -106,6 +107,12 @@ Persisted the same way `destination` is (`crystalpath-waypoints`), for the same 
 **`MapScreen.vue`** adds stops via a "+ ADD STOP" toggle (arms the next map click to call `addWaypoint()` instead of `setDestination()`) plus a small removable chip list, and renders each waypoint as a numbered marker (`waypointMarkerEl()`) reconciled the same full-add/remove-sync way `syncPOIs()` already handles `pois`. **`ProfileScreen.vue`**'s saved places gained a second action, "+ STOP" (alongside the existing "GO"), shown only when a trip is already active — the other way to build a multi-stop trip, from a saved place instead of a map tap.
 
 **Verified against real OSRM data end to end**: set a destination (2-coordinate request), armed and added a stop (request became 3 coordinates, a numbered marker and chip appeared, turn-by-turn kept working across the now-2-leg route), reloaded and confirmed the waypoint restored, removed it via its chip (request back to 2 coordinates), added a second stop and moved simulated position onto its exact coordinates (it was silently dropped and the route recalculated toward the final destination, which remained set — not completed), and confirmed setting a brand-new destination correctly cleared a pending waypoint. Also verified `ProfileScreen.vue`'s "+ STOP" action end to end. Zero console/page errors throughout.
+
+### Pickups (Milestone 8, phase 1)
+
+`revealPOIs()` has put real POIs on the map since Milestone 4; reaching one never did anything until this. A `watch([position, pois], ...)`, structurally identical to the waypoint-arrival watcher above, removes a reached POI from `pois` — `syncPOIs()` in `MapScreen.vue` already fully reconciles markers against that array, so the marker disappears with no new marker-handling code needed — and fires the one-shot `pickupJustCollected` signal. Uses `.find()`, not "collect everything within range" — a dense cluster of revealed POIs collects one per position update rather than all at once, an incidental but real throttle.
+
+`MapScreen.vue` watches the signal, calls `profile.recordPickupCollected()` (see `Profile.md`), and shows a toast naming the real place (`pickup.name ?? pickup.category`), the same fallback `syncPOIs()`'s own popup text already uses. Cleared in `reset()`, same as `tripJustCompleted`.
 
 **Rendered by `HudOverlay.vue`**, not a separate component — see "The HUD layer" below for why.
 

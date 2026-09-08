@@ -450,6 +450,19 @@ watch(() => navigation.tripJustCompleted, (trip) => {
   showXpToast(leveledUp ? `ARRIVED — +${xpGranted} XP — LEVEL UP!` : `ARRIVED — +${xpGranted} XP`)
   navigation.acknowledgeTripCompletion()
 })
+
+// Milestone 8, phase 1: pickups — reaching a POI that SCOUT (or its
+// per-genre equivalent) already revealed. Named by the real place when one
+// exists (matches the popup text syncPOIs() already gives it), falling back
+// to its category the same way that popup does.
+watch(() => navigation.pickupJustCollected, (pickup) => {
+  if (!pickup) return
+  const cls = store.chosenClass
+  const { leveledUp, xpGranted } = profile.recordPickupCollected(cls.id, cls)
+  const label = pickup.name ?? pickup.category ?? 'a landmark'
+  showXpToast(leveledUp ? `Picked up ${label} — +${xpGranted} XP — LEVEL UP!` : `Picked up ${label} — +${xpGranted} XP`)
+  navigation.acknowledgePickupCollected()
+})
 </script>
 
 <style scoped>

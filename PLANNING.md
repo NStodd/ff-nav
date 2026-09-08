@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§27) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§28) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -459,6 +459,18 @@ Closes out Direction F (saved destinations §23, turn-by-turn §24, this). The r
 
 **Verified against real OSRM data end to end, not mocked at any step**: set a destination (confirmed a 2-coordinate request), armed and added a stop (request became 3 coordinates; a numbered marker, a chip, and a still-working turn-by-turn instruction all appeared across the now-2-leg route), reloaded and confirmed the waypoint restored from `localStorage`, removed it via its chip (request back to 2 coordinates), added a second stop and moved simulated position onto its *exact* real coordinates (captured from the live OSRM response) — it was silently dropped and the route recalculated toward the final destination, which remained set rather than completing the trip — and confirmed setting a brand-new destination correctly cleared a pending waypoint. Separately verified `ProfileScreen.vue`'s "+ STOP" action adds a real waypoint marker end to end. Zero console/page errors across every check.
 
+### 28. Milestone 8, phase 1: pickups
+
+**Files changed:** `src/stores/navigation.js`, `src/stores/profile.js`, `src/views/MapScreen.vue`, `src/views/ProfileScreen.vue`
+
+First piece of §8, picked as the smallest and most contained per its own spec: `revealPOIs()` (the Adventurer archetype's ability) has put real POIs on the map since Milestone 4, but reaching one never did anything. This closes that loop.
+
+**`navigation.js`** gained a `watch([position, pois], ...)`, structurally identical to the waypoint-arrival watcher Direction F just added — on proximity to any revealed POI, it's removed from `pois` (so `syncPOIs()` in `MapScreen.vue`, already a full reconciliation, removes its marker with no new marker code needed) and a one-shot `pickupJustCollected` signal fires, same pattern as `tripJustCompleted`. Deliberately `.find()`, not "collect every POI within range at once" — a dense cluster of revealed POIs collects one per position update, not in a single burst, a real (if incidental) throttle rather than an engineered one.
+
+**`profile.js`** gained `recordPickupCollected(classId, classData)` (mirrors `recordAbilityUsed` exactly) and a `pickupsCollected` lifetime counter. **Caught during this pass, not before shipping it broken:** `progressFor()` only ever creates a *new* class entry through `blankClassProgress()` — an already-existing entry (any real profile from before this change) would read `pickupsCollected` as `undefined` forever, since nothing re-runs old entries through the blank shape. Fixed with a targeted backfill inside `progressFor()` itself (checks specifically for the new field, sets it to `0` if missing) rather than a generic re-merge on every read, which would reassign the object on every single call and trigger reactivity for nothing.
+
+**Verified against real Overpass data, not synthetic POIs**: swept real POIs via SCOUT, captured the actual Overpass response, moved simulated position onto a real returned POI's exact coordinates across two consecutive position updates — marker count dropped by exactly two (one per update, confirming the one-at-a-time throttle), and the persisted profile's `pickupsCollected` counter incremented to match. Separately confirmed the backward-compatibility backfill: manually stripped the field from a persisted profile, reloaded, and the profile screen showed `0`, not blank or `NaN`. Zero console/page errors.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -735,9 +747,11 @@ A Playwright test that scripts geolocation along a real fetched route's own coor
 
 ---
 
-## 8. Quests, pickups, and deeper progression (proposed)
+## 8. Quests, pickups, and deeper progression
 
-Not started. Everything Direction F built deepened *navigation*; this deepens the *genre/RPG layer* the other direction — the abstraction `Genres.md` describes (a shell four RPG-flavored genres plug into) has stayed at "class, sprite, ability, growth" since Milestone 5. Quests, pickups, and richer growth are the next layer of that abstraction, not a new one bolted on beside it.
+**Pickups implemented — see §28.** Quests and deeper growth (titles, cosmetic unlocks, skill points) remain proposed, as written below.
+
+Everything Direction F built deepened *navigation*; this deepens the *genre/RPG layer* the other direction — the abstraction `Genres.md` describes (a shell four RPG-flavored genres plug into) has stayed at "class, sprite, ability, growth" since Milestone 5. Quests, pickups, and richer growth are the next layer of that abstraction, not a new one bolted on beside it.
 
 **The constraint that shapes everything below, stated up front:** this app has no server, no accounts, and (per the product-direction conversation that opened Milestone 5) a firm commitment to being a real navigation tool that never fakes support it doesn't have. So nothing here invents mechanics divorced from real movement — a "quest" has to resolve to *trips taken, distance covered, places actually reached, abilities actually used*, the same real, already-tracked events `profile.js` has recorded since Milestone 5. This is a content and presentation layer over real behavior, not a new simulation running alongside it.
 
