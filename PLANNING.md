@@ -732,3 +732,92 @@ Worth deciding deliberately rather than guessing, possibly via a short back-and-
 ### Verification plan
 
 A Playwright test that scripts geolocation along a real fetched route's own coordinates step by step (not just a single start/end pair), confirming the banner's instruction and distance update correctly as simulated position advances past each maneuver, and that it updates (not just persists) correctly across a reroute.
+
+---
+
+## 8. Quests, pickups, and deeper progression (proposed)
+
+Not started. Everything Direction F built deepened *navigation*; this deepens the *genre/RPG layer* the other direction — the abstraction `Genres.md` describes (a shell four RPG-flavored genres plug into) has stayed at "class, sprite, ability, growth" since Milestone 5. Quests, pickups, and richer growth are the next layer of that abstraction, not a new one bolted on beside it.
+
+**The constraint that shapes everything below, stated up front:** this app has no server, no accounts, and (per the product-direction conversation that opened Milestone 5) a firm commitment to being a real navigation tool that never fakes support it doesn't have. So nothing here invents mechanics divorced from real movement — a "quest" has to resolve to *trips taken, distance covered, places actually reached, abilities actually used*, the same real, already-tracked events `profile.js` has recorded since Milestone 5. This is a content and presentation layer over real behavior, not a new simulation running alongside it.
+
+### Pickups — the smallest, most natural piece
+
+Right now `revealPOIs()` (the Adventurer archetype's ability) finds real POIs and puts markers on the map, and that's the end of it — nothing happens if you actually drive to one. Pickups close that loop: reaching a revealed POI collects it.
+
+- A `watch([position, pois], ...)` in `navigation.js`, structurally identical to the waypoint-arrival watcher Direction F just added — on proximity to any not-yet-collected POI, remove it from `pois` and record the collection.
+- Reward: small XP via a new `profile.recordPickupCollected(classId, classData)`, mirroring `recordAbilityUsed`/`recordPOIsDiscovered` exactly. A new lifetime counter (`pickupsCollected`) alongside the four `profile.js` already tracks.
+- Genre flavor is a label/icon swap only, not a new mechanic — a rune, a data cache, a bounty tip, a buried-treasure marker are the same "found and collected" event underneath. Ties directly into "represent the map in the chosen genre" below: the reused `iconForCategory()`/`poiMarkerEl()` pipeline just needs a genre-aware variant.
+
+### Quests — grounded in stats the app already tracks
+
+**Key design decision, worth stating plainly: quest progress should be *derived* from `profile.js`'s existing counters wherever an objective type already has one, not duplicated into new tracked state.** "Discover 15 POIs" is just `profile.progressFor(classId).poisDiscovered >= 15` read live — no separate progress counter to keep in sync or let drift, the same lesson the `xpGranted`-drift bug from Milestone 5 already taught this codebase once. The only *new* persisted state needed is which quests have been **claimed** (so a reward isn't re-granted every time the underlying stat is re-checked) — a small `claimedQuestIds` set, not a shadow copy of every objective's progress.
+
+Proposed shape, `src/data/quests.js` (one file, `genreId`-tagged entries — quest volume per genre is likely small, unlike the 4-classes-per-file split that earned separate files):
+
+```js
+{
+  id:        'ff-scout-the-old-city',  // globally unique, like class ids
+  genreId:   'ff',
+  title:     'Scout the Old City',
+  flavor:    'The archives speak of streets no map remembers...',
+  objective: { type: 'poisDiscovered', count: 15 },  // or tripsCompleted, distanceMeters,
+                                                       // abilitiesUsed, pickupsCollected —
+                                                       // anything profile.js already counts
+  reward:    { xp: 150 },
+}
+```
+
+**One objective type has no existing counter to derive from: visiting a specific real place** (`{ type: 'visitPlace', lat, lng, radiusMeters, label }`) — a real landmark, tied to real geography, checked with the same haversine-against-a-radius pattern `ARRIVAL_RADIUS_M` already established. This is the one genuinely new tracking mechanism this milestone needs; everything else reads what already exists.
+
+**Design questions to settle before building:**
+- **A Quest Log screen, or a section on `ProfileScreen.vue`?** `ProfileScreen.vue` is already "your durable progress, one screen" — leans toward a new section there for a first pass (active + completed lists), same reasoning that put saved destinations there instead of a new screen, with a dedicated screen only if quest volume grows enough to crowd it out.
+- **Are quests genre-locked, or does switching genres abandon in-progress ones?** Given quest flavor is genre-voiced narrative, an FF quest reads oddly once you're playing Star Voyager — but the underlying stat (POIs discovered) isn't genre-scoped in `profile.js` today (it's per-class, and class ids are already genre-agnostic once picked). Leans toward: a quest's *objective* keeps counting regardless of current genre (the stat doesn't care), but its *card* only appears in its own genre's quest list — consistent with `profile.js`'s "class ids are unique across every genre" property already being load-bearing elsewhere (`findClassById()`).
+- **How many quests per genre for a first pass?** Three to five, covering a spread of objective types (one trip-based, one POI-based, one distance-based, one `visitPlace`), rather than a large content push before the mechanism itself is proven out — same "build the shell, prove it generalizes, then fill in content" order every genre-generic system in this app has followed.
+
+### Deeper character growth
+
+Smaller, more speculative pieces worth having a real answer for even if not all built in the same pass:
+
+- **Titles/badges** — a short list of unlocked labels (e.g. "Pathfinder" at 10 trips), shown on `ProfileScreen.vue` next to the level pips. Derived the same way quest progress is (a threshold check against existing counters), so this is nearly free once quests' "derive, don't duplicate" pattern exists.
+- **Cosmetic unlocks** — `spriteAlternates.js` already holds designed-but-unused alternate poses for several classes; gating one behind a level or quest completion (instead of everything being freely available from level 1) gives growth something visible to show for itself beyond stat multipliers. Needs a small "which sprite is currently equipped" field somewhere — `profile.js`, per class, since it's a per-class cosmetic choice.
+- **Skill points / stat reallocation** — explicitly the most speculative piece here, flagged rather than scoped: today STR/EXP/AGI are fixed per class, and the multiplier formulas (`powerMultiplier`/`cooldownMultiplier`) already read live level, not just base stats. Whether players should get to *choose* where growth goes, versus it staying automatic, is a real product question, not an engineering one — worth a deliberate call before building rather than guessing.
+
+### Verification plan
+
+Same real-data discipline as everything else in this app: no mocked quest completion. A Playwright run that plays through enough real ability/trip/POI activity to actually cross a quest's threshold, confirms the quest screen reflects it un-prompted (derived state, not a manual trigger), claims the reward once, and confirms replaying the same activity doesn't grant it twice. Pickups verified against a real Overpass-revealed POI and a real simulated arrival at its exact coordinates, matching the pattern already established for waypoint arrival.
+
+---
+
+## 9. Genre world-skinning (proposed)
+
+Not started. Every genre-generic system built so far — classes, sprites, abilities, onboarding copy — reskins the *character* layer. The map itself has stayed genre-neutral: all four genres render the identical CARTO "Dark Matter" style, the same palette regardless of whether you're playing a knight, a pilot, a gunslinger, or a pirate. This closes that gap — but with a hard constraint stated up front, because it's the one most likely to get this wrong: **the map has to stay a real, accurate map underneath.** Real street names, real POI positions, real routing don't get hidden, renamed, or fictionalized — only *how the same real data is painted* changes. A gorgeous fantasy map a driver can't actually trust is a worse navigation tool than the plain dark one shipping today; this app's whole premise since the Milestone 5 product-direction conversation has been refusing that tradeoff.
+
+### The technical approach: repaint the real tiles, don't replace them
+
+MapLibre's vector tiles (CARTO's Dark Matter style included) separate *data* (roads, water, buildings, labels — real OpenStreetMap geometry) from *style* (the paint rules deciding how each data layer renders). Today `MapScreen.vue` loads Dark Matter's style wholesale and never touches it again. The plan is to keep using the exact same real tile data, but apply a **genre-specific palette override** on top of it once the style loads — `map.setPaintProperty(layerId, property, genreColor)` for the handful of layers that matter (background, water, land cover, road classes, buildings, labels), not a wholesale replacement style. This is a real, supported MapLibre pattern (restyling shared basemap data), not a workaround.
+
+**Already checked against the real style, not guessed at** (same "verify against the live thing before writing code" discipline this session has used against OSRM and Overpass all along): Dark Matter's real style JSON has 93 layers, cleanly grouped — 1 `background`, 8 water, 4 landcover, 2 landuse, 2 building, 51 road (many are tunnel/bridge/case variants per road class, not one layer per class), 4 boundary, 17 label/place, plus aeroway/rail. Colors are set via plain `paint.background-color`/`line-color`/`fill-color` — some flat hex, some zoom-interpolated `stops` arrays, both overridable via `setPaintProperty()`. **Zero dedicated POI layers exist in the base style at all** — confirms POI/destination/user markers are entirely this app's own `Marker` layer already, completely untouched by any base-style reskin, which settles the "do POI icons need genre variants" question below in favor of leaving them alone. The road layer's real id list needs enumerating (not one clean `road` id to target) rather than guessed at when this is actually built, but nothing here contradicts the approach — it's a real, feasible plan, not a hopeful one.
+
+### A concrete, cheap win already sitting in the codebase: `StarField.vue`
+
+Star Voyager's onboarding screens already render an animated starfield background — built for a completely different screen, but nothing about it is onboarding-specific. Layering a low-opacity `StarField.vue` behind the map canvas specifically for the `scifi` genre (and only that genre) is a real, already-tested piece of atmosphere for near-zero new work, and a good pilot for "genre-specific decorative layer" as a concept distinct from "genre-specific palette."
+
+### Design questions to settle before building
+
+- **FF (fantasy) as the pilot genre, then the same mechanism for the other three** — this was the explicit ask, and matches every other genre-generic system's own history (`Genres.md` §8-§10: build once, verify it generalizes, then roll out) rather than trying to design all four palettes simultaneously before any of them are proven against a real rendered map.
+- **How far does "genre feel" extend beyond palette?** Line style (dashed/organic road edges reading as "old map" for fantasy vs. crisp grid lines for sci-fi) and label typography are both real MapLibre-supported levers, not just color — worth a `/dev/map` comparison pass (the tool already exists from Milestone 6) before committing, the same way the route-line gradient decision was actually made by looking at rendered options rather than by description.
+- **Do POI icons need genre-specific variants, or does the existing category-based set (`poiIcons.js`) stay universal?** A café is a café regardless of genre; leans toward keeping the functional icon set universal and reserving genre reskinning for the *base map* and *pickups* (which are already flavor items, not functional wayfinding), so the things a driver relies on to actually find a real place don't change meaning across genres.
+- **Performance/readability regression risk is real, not hypothetical** — a heavily-stylized "old parchment map" could easily become harder to read at a glance while driving than the current plain dark theme, which was chosen partly *because* high contrast and minimal visual noise are safer at a glance. Every genre palette needs the same real-phone-viewport screenshot discipline Milestone 6 used, not just a desktop screenshot, before shipping.
+
+### Implementation steps
+
+- [x] Fetch and inspect Dark Matter's real style JSON — layer ids, paint properties, what's actually overridable. Done above.
+- [ ] Extend `/dev/map` (Milestone 6) with a genre-palette picker, so candidate palettes get compared against the same real fetched route the route-line decision was made against — reusing the tool rather than building a second one.
+- [ ] A `worldSkin` entry per genre (likely in `genres.js` alongside each genre's existing `color`/`tagline`, or a sibling `worldSkins.js` if the palette objects get large) — background/water/land/road/building/label color overrides, applied in `MapScreen.vue` once the base style's `load` event fires.
+- [ ] Pilot on FF only; screenshot at real phone viewports before deciding it's ready to generalize.
+- [ ] Roll the same mechanism to Star Voyager (pairing with the `StarField.vue` overlay idea above), Wild Frontier, and High Seas — content work at that point, not new engineering, if the FF pilot's mechanism holds.
+
+### Verification plan
+
+`/dev/map` screenshots comparing each genre's palette against the same real route, at real phone viewport sizes (per Milestone 6's own established practice) — plus confirming on the real map screen that street names, POI names, and routing accuracy are all completely unaffected by the reskin. A palette change that so much as looks like it could be hiding real map information is a failure of this milestone, not a stylistic quibble.
