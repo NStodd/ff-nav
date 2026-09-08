@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§31) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§32) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -518,6 +518,16 @@ First concrete step of §9, exactly as its own implementation plan laid out: ext
 
 **Explicitly not done in this pass, on purpose**: the FF skin is not yet applied to the real `MapScreen.vue` — it exists only in `/dev/map`, pending a look at this pilot's real output before committing to shipping it; road *line style*, *land type* variation, genre-specific *POI icons*, and *HUD chrome* treatment (all confirmed as wanted eventually, not scope creep, per the design-questions update above) stayed out of this pass too, since none of them needed to be part of the first palette-comparison screenshots.
 
+### 32. Genre world-skinning, phase 2: FF pilot live on the real map
+
+**Files changed:** `src/views/MapScreen.vue`
+
+The `/dev/map` pilot's real output (§31) held up, so this applies it where it actually matters: one line, `applyWorldSkin(map, MAP_LAYER_GROUPS, worldSkinFor(store.chosenGenre.id))`, added to `MapScreen.vue`'s existing `map.on('load', ...)` handler, right before the route-layer setup that was already there. No watcher needed — the chosen genre is fixed for the life of this screen (changing it means starting over, which unmounts the whole component), so a one-time apply on load is enough, unlike `/dev/map`'s own picker which has to handle switching skins live.
+
+**A no-op for every genre besides FF, on purpose and by construction** — `worldSkinFor()` returns `null` for `scifi`/`western`/`pirate` until each gets its own palette, and `applyWorldSkin()` already treats a `null` skin as a no-op (built that way in §31 specifically so a caller wouldn't need its own "does this genre have a skin yet" guard). Shipping this to the real map for FF doesn't touch the other three genres at all — not "shouldn't," verified didn't.
+
+**Verified with Playwright against the real map screen, real geolocation, and a real phone viewport (390px)**: seeded `localStorage` to land directly on `/ff/map` as Fighter, past onboarding, and confirmed the same warm gold-brown-and-teal palette from the `/dev/map` pilot renders correctly on the actual app screen — real street names, the HUD panel, the SCOUT button, and the position marker all present and legible, nothing hidden or altered beyond color. Separately loaded `/scifi/map` as Pilot under the same conditions and confirmed the same cool-gray shipped look as before this change, visually unaffected, with zero console/page errors on both runs — direct proof the no-op path for un-piloted genres actually holds on the live screen, not just in the data layer.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -850,7 +860,7 @@ Same real-data discipline as everything else in this app: no mocked quest comple
 
 ---
 
-## 9. Genre world-skinning (phase 1 piloted — see §31; not yet applied to the live map)
+## 9. Genre world-skinning (FF pilot live on the real map — see §31, §32)
 
 Not started. Every genre-generic system built so far — classes, sprites, abilities, onboarding copy — reskins the *character* layer. The map itself has stayed genre-neutral: all four genres render the identical CARTO "Dark Matter" style, the same palette regardless of whether you're playing a knight, a pilot, a gunslinger, or a pirate. This closes that gap — but with a hard constraint stated up front, because it's the one most likely to get this wrong: **the map has to stay a real, accurate map underneath.** Real street names, real POI positions, real routing don't get hidden, renamed, or fictionalized — only *how the same real data is painted* changes. A gorgeous fantasy map a driver can't actually trust is a worse navigation tool than the plain dark one shipping today; this app's whole premise since the Milestone 5 product-direction conversation has been refusing that tradeoff.
 
@@ -877,9 +887,9 @@ Star Voyager's onboarding screens already render an animated starfield backgroun
 - [x] Extend `/dev/map` (Milestone 6) with a genre-palette picker, so candidate palettes get compared against the same real fetched route the route-line decision was made against — reusing the tool rather than building a second one. Done — see §31.
 - [x] A `worldSkin` entry per genre — landed as a sibling `worldSkins.js` (paired with `mapLayerGroups.js`), not folded into `genres.js`, since the real layer-id lists turned out too large to sit next to `color`/`tagline`. Background/water/land/road(major+minor, each with a separate case/casing color)/building/label overrides. See §31.
 - [x] Pilot on FF only; screenshot before deciding it's ready to generalize. See §31 — includes a real phone-width (390px) crop of the map region itself, not just a desktop-sized capture of the whole `/dev/map` tool.
-- [ ] **Not yet done: apply the piloted FF `worldSkin` on the real `MapScreen.vue`.** Everything above lives in `/dev/map` only, on purpose — same "prove it in the design-review tool first" order the route-line gradient and HUD elements went through before landing in the shipped app. This is the next concrete step, pending a look at the FF pilot's real output (§31) before committing to it.
+- [x] Apply the piloted FF `worldSkin` on the real `MapScreen.vue`. Done — see §32.
 - [ ] Roll the same mechanism to Star Voyager (pairing with the `StarField.vue` overlay idea above), Wild Frontier, and High Seas — content work at that point, not new engineering, if the FF pilot's mechanism holds.
 
 ### Verification plan
 
-`/dev/map` screenshots comparing each genre's palette against the same real route, at real phone viewport sizes (per Milestone 6's own established practice) — plus confirming on the real map screen that street names, POI names, and routing accuracy are all completely unaffected by the reskin. A palette change that so much as looks like it could be hiding real map information is a failure of this milestone, not a stylistic quibble. Phase 1 (§31) satisfies this for FF's palette in `/dev/map`; the "on the real map screen" half of this plan is still open until the not-yet-done step above ships.
+`/dev/map` screenshots comparing each genre's palette against the same real route, at real phone viewport sizes (per Milestone 6's own established practice) — plus confirming on the real map screen that street names, POI names, and routing accuracy are all completely unaffected by the reskin. A palette change that so much as looks like it could be hiding real map information is a failure of this milestone, not a stylistic quibble. Phase 1 (§31) satisfied this for FF's palette in `/dev/map`; phase 2 (§32) satisfied the "on the real map screen" half, plus a same-conditions non-FF genre check to confirm the no-op path leaves every other genre completely untouched.

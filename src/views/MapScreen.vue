@@ -43,6 +43,8 @@ import { useProfileStore } from '@/stores/profile.js'
 import { iconForCategory } from '@/data/poiIcons.js'
 import { iconForManeuver } from '@/data/maneuverIcons.js'
 import { questsForGenre, isQuestComplete } from '@/data/quests.js'
+import { MAP_LAYER_GROUPS } from '@/data/mapLayerGroups.js'
+import { worldSkinFor, applyWorldSkin } from '@/data/worldSkins.js'
 import HudOverlay from '@/components/HudOverlay.vue'
 import Toast from '@/components/Toast.vue'
 
@@ -262,6 +264,16 @@ onMounted(() => {
   map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
 
   map.on('load', () => {
+    // §9 world-skinning, phase 2: apply the FF pilot palette from
+    // worldSkins.js (see PLANNING.md §31) directly to the live map, not
+    // just /dev/map. A no-op for every genre besides FF today —
+    // worldSkinFor() returns null for the other three until they get their
+    // own palette, so this line does nothing for them, same as before this
+    // existed. No watcher needed: the chosen genre is fixed for the life
+    // of this screen (changing it means starting over, which unmounts
+    // this component entirely), so a one-time apply on load is enough.
+    applyWorldSkin(map, MAP_LAYER_GROUPS, worldSkinFor(store.chosenGenre.id))
+
     // `lineMetrics: true` is required for `line-gradient` below (it needs
     // per-vertex distance-along-the-line data) — decided via /dev/map's
     // side-by-side comparison against a flat line and a width-taper variant;
