@@ -1,6 +1,6 @@
 # Crystal Path — Implementation Planning
 
-Chronological build log (**## Finished**, §1–§29) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
+Chronological build log (**## Finished**, §1–§30) of everything shipped so far, followed by the original detailed spec for the shared-layer milestones (numbered sections below the log) written before that work began. The log now covers class-specific work too (§12–§15, milestone 4's four archetype abilities) — the "before any class-specific work begins" framing was accurate when this file was created but the log outgrew it.
 
 ---
 
@@ -486,6 +486,19 @@ Second piece of §8. Unlike world-skinning (§9), which is genuinely novel per-g
 
 **Verified against real, live gameplay, not fixture data**: triggered a real SCOUT sweep (a live Overpass response with well over 20 real POIs) and watched "Cartographer of the Unknown" (20 POIs) auto-complete and persist across a reload with no interaction beyond the ability press itself; separately, a real near-instant trip completion correctly auto-completed "First Steps" with a toast showing the actual post-EXP-multiplier XP amount, not the base reward value. One nice emergent confirmation, not staged: "Treasure Seeker" (5 pickups) already showed real progress in the same run, purely from Milestone 8 phase 1's pickup watcher firing ambiently — direct proof the two features compose correctly without any special-casing between them. One cosmetic bug caught and fixed during this verification: the ✓ checkmark character isn't in the Press Start 2P font and rendered as a stray glyph in the "DONE" badge — dropped it, plain text reads just as clearly. Zero console/page errors throughout.
 
+### 30. Milestone 8, phase 3: titles
+
+**Files created:** `src/data/titles.js`
+**Files changed:** `src/views/ProfileScreen.vue`, `Profile.md`
+
+Third and simplest piece of §8. A title isn't a one-time event the way a quest or pickup is — it's a status, true or false right now — so it needed **no reward, no claim step, and no persisted state at all**, not even a claimed-ids list. `earnedTitles(stats, level)` just filters a five-entry catalog fresh every time `ProfileScreen.vue` renders: Pathfinder (10 trips), Wanderer (50km lifetime distance), Adept (level 3), Collector (25 pickups), Master Cartographer (100 POIs discovered).
+
+**Genre-agnostic, unlike quests.js's 20 genre-voiced entries** — "Pathfinder" isn't a fantasy or sci-fi idea, it's a real achievement, so one catalog covers all four genres rather than a per-genre set. Most objective types read the same `stats` fields quests already derive from; `level` is the one addition, since a class's level isn't a stored field (it's computed from `xp` via `levelOf()`), so `isTitleEarned()` takes it as a separate argument rather than expecting it on `stats`.
+
+Shown as a row of chips under the STR/EXP/AGI pips on the character card, only once something's actually earned — no chip row at all otherwise.
+
+**Verified with Playwright against a real seeded profile, not assumptions about the logic**: confirmed zero titles at zero stats; seeded stats crossing some thresholds but not others and confirmed exactly the three expected titles appeared (Pathfinder, Adept, Collector) while the other two (Wanderer, Master Cartographer) correctly stayed absent; confirmed **zero new persisted keys** before vs. after — proof nothing about a title is ever written anywhere. A second, visual verification pass incidentally reconfirmed the quest-completion watcher's `immediate: true` retroactive-crediting (§29) composes correctly with freshly-seeded stats: XP jumped from a seeded 650 to a level-5-capped 1139 as several already-exceeded quest thresholds auto-claimed on mount, alongside the new title chips. Zero console/page errors.
+
 ---
 
 ## 1. Persistence & routing guards
@@ -764,7 +777,7 @@ A Playwright test that scripts geolocation along a real fetched route's own coor
 
 ## 8. Quests, pickups, and deeper progression
 
-**Pickups implemented — see §28. Quests implemented — see §29** (all four genres, not just FF — see §29 for why quests got the "build once, prove it generalizes across all genres immediately" treatment rather than an FF-only pilot). Deeper growth (titles, cosmetic unlocks, skill points) remains proposed, as written below.
+**Pickups implemented — see §28. Quests implemented — see §29. Titles implemented — see §30** (all four genres, not just FF — see §29 for why quests got the "build once, prove it generalizes across all genres immediately" treatment rather than an FF-only pilot; titles are genre-agnostic by design, see §30). Cosmetic unlocks and skill points remain proposed, as written below.
 
 Everything Direction F built deepened *navigation*; this deepens the *genre/RPG layer* the other direction — the abstraction `Genres.md` describes (a shell four RPG-flavored genres plug into) has stayed at "class, sprite, ability, growth" since Milestone 5. Quests, pickups, and richer growth are the next layer of that abstraction, not a new one bolted on beside it.
 

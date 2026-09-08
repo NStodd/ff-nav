@@ -108,6 +108,16 @@ The one thing that genuinely needed new persisted state: **which quests have bee
 
 ---
 
+## Titles (Milestone 8, phase 3)
+
+`src/data/titles.js` — the simplest of §8's three "deeper growth" pieces, and simpler even than quests: a title needs **no persisted state at all**, not even a claimed-ids list. It isn't a one-time event, it's a status — true or false right now — so `earnedTitles(stats, level)` just filters the catalog fresh every time `ProfileScreen.vue` renders. Five to start: Pathfinder (10 trips), Wanderer (50km lifetime distance), Adept (level 3), Collector (25 pickups), Master Cartographer (100 POIs discovered).
+
+**Genre-agnostic, unlike quests.** "Pathfinder" isn't a fantasy or sci-fi idea, it's a real achievement — one catalog serves all four genres rather than a genre-voiced set. `level` is the one objective type that isn't a raw `profile.js` field (a class's level is computed from `xp` via `levelForXP()`, not stored directly), so `isTitleEarned()` takes it as a separate argument rather than trying to read it off `stats`.
+
+Shown as a row of chips under the STR/EXP/AGI pips on `ProfileScreen.vue`'s character card, only once something's actually earned. **Confirmed to add zero new state** by seeding a profile with stats crossing some thresholds but not others and checking the persisted keys before and after — identical, since nothing about a title is ever written anywhere.
+
+---
+
 ## The party roster
 
 `addPartyMember(name, note)` / `removePartyMember(id)` manage a plain local array — no accounts, no sync, no live location of anyone but the player. Two places call them: `ProfileScreen.vue` (ongoing management) and, since this pass, a dedicated **`PartyStep.vue`** onboarding step — `'party'` in `onboardingSteps`, present on all sixteen classes now, positioned right after the ability reveal (and after `personalize` for the four FF classes that have one). Every class has its own `partyPrompt` flavor line in the same voice as its `intro`/`locationPrompt` (bold for Adventurer, terse for Speedrunner, warm for Connector, ominous-and-skippable for Sovereign — a Black Mage/Overseer/Outlaw/Captain's prompt leans into reluctance rather than pretending privacy-focused classes are suddenly social). The step is never mandatory: "Continue" only requires the typewriter to finish, not that anyone actually got added.

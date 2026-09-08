@@ -36,6 +36,13 @@
             <span class="pip-label">{{ stat.toUpperCase() }}</span>
             <span v-for="n in 5" :key="n" class="pip" :class="{ filled: n <= store.chosenClass.stats[stat] }" />
           </div>
+
+          <!-- Milestone 8, phase 3: titles. A status, not an event — nothing
+               here is persisted, it's recomputed fresh every render, and
+               only shown at all once there's something earned. -->
+          <div v-if="earnedTitleList.length" class="title-chips">
+            <span v-for="t in earnedTitleList" :key="t.id" class="title-chip">{{ t.label }}</span>
+          </div>
         </div>
       </section>
 
@@ -151,6 +158,7 @@ import { useProfileStore } from '@/stores/profile.js'
 import { useNavigationStore } from '@/stores/navigation.js'
 import { findClassById } from '@/data/genres.js'
 import { questsForGenre, questProgress } from '@/data/quests.js'
+import { earnedTitles } from '@/data/titles.js'
 import StarField from '@/components/StarField.vue'
 import PixelDivider from '@/components/PixelDivider.vue'
 import PixelButton from '@/components/PixelButton.vue'
@@ -169,6 +177,11 @@ function formatMeters(m) {
 }
 
 const distanceLabel = computed(() => formatMeters(current.value.distanceMeters))
+
+// Milestone 8, phase 3: titles. Genre-agnostic (see titles.js) — this reads
+// the current class's own stats/level, same as every other tile on this
+// screen, with no genre filtering the way genreQuests below has.
+const earnedTitleList = computed(() => earnedTitles(current.value, progress.value.level))
 
 // Milestone 8, phase 2: quests. `genreQuests` reads the *current* genre —
 // a quest's flavor text is genre-voiced, so it only makes sense to show
@@ -360,6 +373,22 @@ h2 {
   font-size: 6.5px;
   color: var(--ff-muted);
   margin: 0.1rem 0 0.4rem;
+}
+
+.title-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.5rem;
+}
+
+.title-chip {
+  font-size: 6px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--cc) 15%, var(--ff-panel));
+  color: var(--cc);
+  border: 1px solid var(--cc);
+  letter-spacing: 0.03em;
 }
 
 .stats-grid {
